@@ -222,9 +222,9 @@ Portions Copyright (c) 2018, 2020, Chris Fraire <cfraire@me.com>.
 
         <plugins>
             <plugin>
-                <groupId>org.eclipse.jetty</groupId>
-                <artifactId>jetty-jspc-maven-plugin</artifactId>
-                <version>11.0.16</version>
+                <groupId>org.eclipse.jetty.ee10</groupId>
+                <artifactId>jetty-ee10-jspc-maven-plugin</artifactId>
+                <version>12.0.10</version>
                 <executions>
                     <execution>
                         <id>jspc</id>
@@ -237,6 +237,18 @@ Portions Copyright (c) 2018, 2020, Chris Fraire <cfraire@me.com>.
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.eclipse.jetty.ee10</groupId>
+                <artifactId>jetty-ee10-maven-plugin</artifactId>
+                <version>12.0.10</version>
+                <configuration>
+                    <webAppSourceDirectory>${project.build.directory}/${project.build.finalName}</webAppSourceDirectory>
+                    <httpConnector>
+                        <port>8081</port>
+                    </httpConnector>
+                    <jvmArgs>--add-exports java.base/jdk.internal.ref=ALL-UNNAMED --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports jdk.unsupported/sun.misc=ALL-UNNAMED --add-exports jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED</jvmArgs>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -309,12 +321,15 @@ Portions Copyright (c) 2018, 2020, Chris Fraire <cfraire@me.com>.
                 <version>1.5.1</version>
                 <executions>
                     <execution>
+                        <phase>generate-resources</phase>
                         <goals>
                             <goal>compress</goal>
                         </goals>
                     </execution>
                 </executions>
                 <configuration>
+                    <sourceDirectory>${project.basedir}/src/main/webapp</sourceDirectory>
+                    <outputDirectory>${project.build.directory}/${project.build.finalName}</outputDirectory>
                     <suffix>.min</suffix>
                     <excludes>
                         <exclude>**/*.js</exclude>

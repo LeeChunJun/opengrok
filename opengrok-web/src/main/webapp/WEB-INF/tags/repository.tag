@@ -62,7 +62,9 @@ Portions Copyright (c) 2019, Krystof Tulinger <k.tulinger@seznam.cz>.
             ${Util.htmlize(name)}
         </a>
 
-        <c:set var="messages" value="${MessagesUtils.messagesToJson(project)}"/>
+        <% String _messages = MessagesUtils.messagesToJson(
+            (org.opengrok.indexer.configuration.Project) jspContext.getAttribute("project"));
+           jspContext.setAttribute("messages", _messages != null ? _messages : ""); %>
         <c:if test="${not empty messages}">
             <span class="note-${MessagesUtils.getMessageLevel(project.getName())} important-note important-note-rounded"
                   data-messages='${messages}'>!</span>
