@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenGrok Code Search</title>
+  <style>
+    :root {
+      --bg:        #f4f5f7;
+      --surface:   #ffffff;
+      --fg:        #1a1b2e;
+      --muted:     #6b7280;
+      --border:    #e5e7eb;
+      --accent:    #3b82f6;
+      --accent-dim: rgba(59,130,246,0.08);
+      --green:     #22c55e;
+      --green-dim: rgba(34,197,94,0.10);
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, Menlo, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═ Header ═══ */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo {
+      width: 28px; height: 28px;
+      background: var(--fg);
+      border-radius: 7px;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+    }
+    .header-logo svg {
+      width: 14px; height: 14px;
+      stroke: #60a5fa; fill: none; stroke-width: 2.5;
+    }
+    .header-title {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .header-title span {
+      color: var(--muted);
+      font-weight: 400;
+      margin-left: 4px;
+    }
+    .header-link {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.12s;
+    }
+    .header-link:hover { color: var(--accent); }
+    .header-link svg {
+      width: 14px; height: 14px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+      vertical-align: -1px;
+      margin-right: 4px;
+    }
+
+    /* ══ Main Container ══ */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 36px 24px 48px;
+    }
+
+    /* ══ Search Hero ═══ */
+    .search-hero {
+      margin-bottom: 28px;
+    }
+    .search-hero h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+    .search-hero p {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    /* Primary search */
+    .primary-search {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .primary-search input {
+      width: 100%;
+      height: 48px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 0 16px 0 44px;
+      font-size: 15px;
+      font-family: var(--font-sans);
+      color: var(--fg);
+      background: var(--surface);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .primary-search input::placeholder { color: #b0b4bc; }
+    .primary-search input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .primary-search .ps-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 18px; height: 18px;
+      stroke: var(--muted);
+      fill: none; stroke-width: 2;
+    }
+    .primary-search .ps-kbd {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--muted);
+      background: #f0f1f3;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      font-family: var(--font-sans);
+      pointer-events: none;
+    }
+
+    /* Controls row: advanced toggle + project + type */
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .ctrl-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--fg);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+      font-family: var(--font-sans);
+    }
+    .ctrl-btn:hover { background: #f8f9fb; }
+    .ctrl-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .ctrl-btn svg {
+      width: 13px; height: 13px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    .ctrl-btn .arrow {
+      transition: transform 0.2s;
+    }
+    .ctrl-btn.active .arrow {
+      transform: rotate(180deg);
+    }
+    .ctrl-select {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 12.5px;
+      font-family: var(--font-sans);
+      color: var(--fg);
+      background: var(--surface);
+      outline: none;
+      cursor: pointer;
+    }
+    .ctrl-select:focus { border-color: var(--accent); }
+
+    /* ══ Advanced Search Panel ═══ */
+    .advanced-panel {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease, opacity 0.2s;
+      opacity: 0;
+    }
+    .advanced-panel.open {
+      max-height: 500px;
+      opacity: 1;
+      margin-top: 16px;
+    }
+    .advanced-inner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .adv-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .adv-row:last-of-type { margin-bottom: 0; }
+    .adv-label {
+      width: 90px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--fg);
+      flex-shrink: 0;
+    }
+    .adv-label.secondary {
+      color: var(--muted);
+      font-weight: 400;
+    }
+    .adv-input {
+      flex: 1;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0 12px;
+      font-size: 13px;
+      font-family: var(--font-sans);
+      color: var(--fg);
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .adv-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .adv-input::placeholder { color: #b0b4bc; }
+
+    .adv-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    /* ══ Buttons ═ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.1s;
+      text-decoration: none;
+      font-family: var(--font-sans);
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-secondary {
+      background: #f0f1f3;
+      color: var(--fg);
+    }
+    .btn-secondary:hover { background: #e4e5e8; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: #f8f9fb; color: var(--fg); }
+
+    /* ══ Project Selector ══ */
+    .project-section {
+      margin-bottom: 24px;
+    }
+    .project-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .project-bar label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+    .project-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex: 1 1 100%;
+      order: 3;
+      justify-content: flex-start;
+    }
+    .chip-actions {
+      order: 2;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      transition: all 0.12s;
+      user-select: none;
+    }
+    .chip:hover { border-color: #ccc; }
+    .chip.selected {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .chip .chip-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .chip-actions {
+      display: flex;
+      gap: 4px;
+    }
+    .chip-action {
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: background 0.12s;
+      border: none;
+      background: none;
+      font-family: var(--font-sans);
+    }
+    .chip-action:hover { background: #f0f1f3; color: var(--fg); }
+
+    /* ══ Repository Cards ═══ */
+    .repo-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .repo-section-title .count {
+      font-weight: 400;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .repo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    .repo-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 0.12s, box-shadow 0.12s, transform 0.1s;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .repo-card:hover {
+      border-color: #c7c9d0;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+      transform: translateY(-1px);
+    }
+    .repo-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .repo-card-name {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--fg);
+    }
+    .repo-card-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+    .badge-git {
+      background: #f0f1ff;
+      color: #5b6abf;
+    }
+    .repo-card-url {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .repo-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .repo-card-meta .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .repo-card-meta svg {
+      width: 13px; height: 13px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    .repo-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .repo-card-branch {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+    .repo-card-link {
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .repo-card-link:hover { text-decoration: underline; }
+
+    /* ══ Footer ═══ */
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      padding-top: 8px;
+    }
+    .footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .footer a:hover { text-decoration: underline; }
+
+    /* ══ Sort Bar ═══ */
+    .sort-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sort-bar .sort-label {
+      font-weight: 500;
+      color: var(--fg);
+      margin-right: 4px;
+    }
+    .sort-bar .sort-option {
+      padding: 4px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      border: none;
+      background: none;
+      font-size: 13px;
+      font-family: var(--font-sans);
+      color: var(--muted);
+    }
+    .sort-bar .sort-option:hover { background: #eef0f3; color: var(--fg); }
+    .sort-bar .sort-option.active {
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .sort-bar .sort-sep { color: #d1d5db; margin: 0 2px; }
+
+    /* ══ Results Section ═══ */
+    .results-section {
+      display: none;
+      margin-top: 24px;
+      animation: fadeIn 0.3s ease;
+    }
+    .results-section.visible {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .results-header {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .results-header strong { color: var(--fg); font-weight: 600; }
+    .results-header .query-term { color: var(--accent); font-weight: 500; }
+
+    .result-group-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      letter-spacing: -0.01em;
+    }
+    .result-group-header:first-child { padding-top: 0; }
+    .group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .result-file-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      transition: border-color 0.12s, box-shadow 0.12s;
+    }
+    .result-file-card:hover {
+      border-color: #c7c9d0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    .result-file-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: #fafbfc;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: nowrap;
+    }
+    .result-file-header > a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+      text-decoration: none;
+      color: var(--muted);
+      transition: color 0.12s;
+    }
+    .result-file-header > a:hover {
+      color: var(--accent);
+    }
+    .result-file-header svg {
+      width: 14px; height: 14px;
+      stroke: #9ca3af; fill: none; stroke-width: 2;
+      flex-shrink: 0;
+    }
+    .result-file-header .file-path {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+    .result-file-header .file-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      font-family: var(--font-sans);
+      transition: all 0.12s;
+      text-decoration: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .action-btn:hover {
+      background: #f0f1f3;
+      color: var(--fg);
+      border-color: #ccc;
+    }
+    .action-btn svg {
+      width: 12px; height: 12px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    .result-lines { padding: 4px 0; }
+    .result-line {
+      display: flex;
+      align-items: baseline;
+      padding: 2px 14px 2px 0;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.1s;
+    }
+    .result-line:hover {
+      background: #eef2ff;
+    }
+    .result-line:hover .line-num {
+      color: var(--accent);
+    }
+    .line-num {
+      width: 44px; min-width: 44px;
+      text-align: right;
+      padding-right: 12px;
+      color: #b0b4bc;
+      font-size: 11.5px;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .line-code {
+      flex: 1;
+      padding-right: 14px;
+      white-space: pre;
+      overflow-x: auto;
+    }
+    .line-code .match {
+      background: #fef08a;
+      border-bottom: 2px solid #fde047;
+      padding: 0 1px;
+      border-radius: 2px;
+    }
+
+    /* ══ Pagination ═══ */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 20px 0 8px;
+    }
+    .page-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 36px;
+      height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-family: var(--font-sans);
+      font-weight: 500;
+      color: var(--fg);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      text-decoration: none;
+    }
+    .page-btn:hover {
+      background: #f0f1f3;
+    }
+    .page-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .page-btn.active:hover {
+      background: #2563eb;
+    }
+    .page-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+      pointer-events: none;
+    }
+    .page-btn.nav-btn {
+      color: var(--muted);
+      font-weight: 400;
+    }
+    .page-btn.nav-btn:hover {
+      color: var(--accent);
+    }
+    .page-btn.nav-btn svg {
+      width: 14px; height: 14px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    .page-ellipsis {
+      min-width: 36px;
+      height: 36px;
+      display: grid; place-items: center;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    /* ══ Responsive ═══ */
+    @media (max-width: 700px) {
+      .header { padding: 12px 16px; }
+      .container { padding: 24px 16px 36px; }
+      .adv-row { flex-wrap: wrap; }
+      .adv-label { width: 100%; margin-bottom: -4px; }
+      .repo-grid { grid-template-columns: 1fr; }
+      .controls-row { gap: 6px; }
+      .result-line { font-size: 11.5px; }
+      .line-num { width: 36px; min-width: 36px; font-size: 10.5px; }
+    }
+    @media (max-width: 480px) {
+      .primary-search input { height: 42px; font-size: 14px; }
+      .search-hero h1 { font-size: 19px; }
+      .pagination .page-btn:nth-child(n+5):nth-child(-n+8) {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═ Header ═══ -->
+  <header class="header">
+    <div class="header-logo">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+    </div>
+    <div class="header-title">OpenGrok <span>Code Search</span></div>
+    <a href="code-view.html" class="header-link">
+      <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      代码浏览
+    </a>
+  </header>
+
+  <div class="container">
+
+    <!-- ══ Search Hero ═══ -->
+    <section class="search-hero" data-od-id="search-section">
+      <h1>搜索代码</h1>
+      <p>在已索引的代码仓库中进行多维度检索</p>
+
+      <!-- Primary search (Full Search) -->
+      <div class="primary-search">
+        <svg class="ps-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input type="text" placeholder="全文搜索 — 输入关键词、类名、方法名…" id="full-search" />
+        <span class="ps-kbd">⌘K</span>
+      </div>
+
+      <!-- Controls: advanced toggle, project, type -->
+      <div class="controls-row">
+        <button class="ctrl-btn" id="adv-toggle" onclick="toggleAdvanced()">
+          <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="18" y2="18"/></svg>
+          高级搜索
+          <svg class="arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <select class="ctrl-select" id="type-filter">
+          <option>任意类型</option>
+          <option>Java 源文件</option>
+          <option>XML 文件</option>
+          <option>纯文本</option>
+          <option>配置文件</option>
+          <option>图片</option>
+        </select>
+      </div>
+
+      <!-- Advanced Search Panel (expandable) -->
+      <div class="advanced-panel" id="advanced-panel">
+        <div class="advanced-inner">
+          <div class="adv-row">
+            <span class="adv-label secondary">定义</span>
+            <input type="text" class="adv-input" placeholder="按定义搜索，例如类名、接口名…" />
+          </div>
+          <div class="adv-row">
+            <span class="adv-label secondary">符号</span>
+            <input type="text" class="adv-input" placeholder="按符号搜索，例如变量名、方法名…" />
+          </div>
+          <div class="adv-row">
+            <span class="adv-label secondary">文件路径</span>
+            <input type="text" class="adv-input" placeholder="按路径过滤，例如 src/main/java…" />
+          </div>
+          <div class="adv-row">
+            <span class="adv-label secondary">历史</span>
+            <input type="text" class="adv-input" placeholder="搜索提交历史中的描述…" />
+          </div>
+          <div class="adv-actions">
+            <button class="btn btn-primary" id="adv-search-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+              搜索
+            </button>
+            <button class="btn btn-secondary" onclick="clearSearch()">清除</button>
+            <button class="btn btn-ghost">帮助</button>
+            <button class="btn btn-ghost">设置</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ Project Selector ═══ -->
+    <section class="project-section" data-od-id="project-section">
+      <div class="project-bar">
+        <label>项目</label>
+        <div class="project-chips" id="project-chips">
+          <div class="chip selected" data-project="opengrok" onclick="toggleChip(this)">
+            <span class="chip-dot"></span>
+            opengrok
+          </div>
+          <div class="chip" data-project="mosaic" onclick="toggleChip(this)">
+            <span class="chip-dot"></span>
+            mosaic
+          </div>
+          <div class="chip" data-project="android-arch" onclick="toggleChip(this)">
+            <span class="chip-dot"></span>
+            android-arch
+          </div>
+          <div class="chip" data-project="jetpack-compose" onclick="toggleChip(this)">
+            <span class="chip-dot"></span>
+            jetpack-compose
+          </div>
+        </div>
+        <div class="chip-actions">
+          <button class="chip-action" onclick="selectAll()">全选</button>
+          <button class="chip-action" onclick="invertAll()">反选</button>
+          <button class="chip-action" onclick="clearSearch()">清除</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ Search Results (hidden until search) ═══ -->
+    <section class="results-section" id="results-section" data-od-id="results-section">
+      <div class="sort-bar" id="sort-bar">
+        <span class="sort-label">排序：</span>
+        <button class="sort-option" data-sort="modified" onclick="changeSort(this)">最后修改时间</button>
+        <span class="sort-sep">|</span>
+        <button class="sort-option active" data-sort="relevance" onclick="changeSort(this)">相关度</button>
+        <span class="sort-sep">|</span>
+        <button class="sort-option" data-sort="path" onclick="changeSort(this)">路径</button>
+      </div>
+      <div class="results-header" id="results-header"></div>
+      <div class="results-list" id="results-list"></div>
+      <div class="pagination" id="pagination">
+        <button class="page-btn nav-btn" disabled>
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          Previous
+        </button>
+        <button class="page-btn active">1</button>
+        <button class="page-btn">2</button>
+        <button class="page-btn">3</button>
+        <button class="page-btn">4</button>
+        <button class="page-btn">5</button>
+        <button class="page-btn">6</button>
+        <button class="page-btn">7</button>
+        <span class="page-ellipsis">…</span>
+        <button class="page-btn">100</button>
+        <button class="page-btn nav-btn">
+          Next
+          <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ══ Repository Cards ══ -->
+    <section id="repo-section" data-od-id="repo-section">
+      <div class="repo-section-title">
+        仓库列表 <span class="count">4 个仓库</span>
+      </div>
+      <div class="repo-grid">
+
+        <a href="code-view.html" class="repo-card" data-od-id="repo-opengrok">
+          <div class="repo-card-header">
+            <span class="repo-card-name">opengrok</span>
+            <span class="repo-card-badge badge-git">git</span>
+          </div>
+          <div class="repo-card-url">github.com/oracle/opengrok.git</div>
+          <div class="repo-card-meta">
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              1,247 文件
+            </span>
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              2026-02-06
+            </span>
+          </div>
+          <div class="repo-card-footer">
+            <span class="repo-card-branch">master · f4fa</span>
+            <span class="repo-card-link">浏览 →</span>
+          </div>
+        </a>
+
+        <a href="code-view.html" class="repo-card" data-od-id="repo-mosaic">
+          <div class="repo-card-header">
+            <span class="repo-card-name">mosaic</span>
+            <span class="repo-card-badge badge-git">git</span>
+          </div>
+          <div class="repo-card-url">github.com/JakeWharton/mosaic.git</div>
+          <div class="repo-card-meta">
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              384 文件
+            </span>
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              2026-02-08
+            </span>
+          </div>
+          <div class="repo-card-footer">
+            <span class="repo-card-branch">trunk · 763f</span>
+            <span class="repo-card-link">浏览 →</span>
+          </div>
+        </a>
+
+        <a href="code-view.html" class="repo-card" data-od-id="repo-android-arch">
+          <div class="repo-card-header">
+            <span class="repo-card-name">android-arch</span>
+            <span class="repo-card-badge badge-git">git</span>
+          </div>
+          <div class="repo-card-url">github.com/android/architecture-samples.git</div>
+          <div class="repo-card-meta">
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              96 文件
+            </span>
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              2025-11-20
+            </span>
+          </div>
+          <div class="repo-card-footer">
+            <span class="repo-card-branch">main · a3d2</span>
+            <span class="repo-card-link">浏览 →</span>
+          </div>
+        </a>
+
+        <a href="code-view.html" class="repo-card" data-od-id="repo-jetpack">
+          <div class="repo-card-header">
+            <span class="repo-card-name">jetpack-compose</span>
+            <span class="repo-card-badge badge-git">git</span>
+          </div>
+          <div class="repo-card-url">github.com/android/compose-samples.git</div>
+          <div class="repo-card-meta">
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              210 文件
+            </span>
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              2025-12-15
+            </span>
+          </div>
+          <div class="repo-card-footer">
+            <span class="repo-card-branch">main · c8e1</span>
+            <span class="repo-card-link">浏览 →</span>
+          </div>
+        </a>
+
+      </div>
+    </section>
+
+    <div class="footer" data-od-id="footer">
+      由 <a href="#">OpenGrok</a> 托管 &nbsp;·&nbsp; 最后索引更新：2026 年 2 月 15 日 15:06 CST
+    </div>
+
+  </div>
+
+  <script>
+    // ── Sample search results data ──
+    var searchData = [
+      {
+        group: 'mosaic/',
+        items: [
+          { path: 'mosaic/', name: 'README.md', lines: [
+            { num: 18, code: 'The entrypoint to Mosaic is the <span class="match">runMosaic</span> function.' },
+            { num: 22, code: 'suspend fun main() = <span class="match">runMosaic</span> {' }
+          ]},
+          { path: 'mosaic/', name: 'CHANGELOG.md', lines: [
+            { num: 5, code: '- <span class="match">runMosaic</span>: The entrypoint function which dictates the composition scope.' },
+            { num: 12, code: '- <span class="match">runMosaic</span> is now a suspending function which will return when the composition ends.' }
+          ]}
+        ]
+      },
+      {
+        group: 'mosaic/mosaic-runtime/src/commonMain/kotlin/com/jakeWharton/mosaic',
+        items: [
+          { path: 'mosaic/mosaic-runtime/src/commonMain/kotlin/com/jakeWharton/mosaic/', name: 'mosaic.kt', lines: [
+            { num: 17, code: 'public suspend fun <span class="match">runMosaic</span>(content: @Composable () -> Unit)' },
+            { num: 24, code: '  <span class="match">runMosaic</span>(content)' }
+          ]}
+        ]
+      },
+      {
+        group: 'mosaic/mosaic-runtime/api',
+        items: [
+          { path: 'mosaic/mosaic-runtime/api/', name: 'mosaic.api', lines: [
+            { num: 3, code: 'public static final fun <span class="match">runMosaic</span> (Lcom/jakeWharton/mosaic/MosaicComposePolicy;Lkotlin/jvm/Func…' },
+            { num: 7, code: 'public static synthetic fun <span class="match">runMosaic</span>$default (Lcom/jakeWharton/mosaic/MosaicComposePolicy…' }
+          ]}
+        ]
+      }
+    ];
+
+    // ── Search handler ──
+    function performSearch() {
+      var query = document.getElementById('full-search').value.trim();
+      if (!query) return;
+
+      // Show results section, hide repo cards
+      var resultsSection = document.getElementById('results-section');
+      var repoSection = document.getElementById('repo-section');
+      resultsSection.classList.add('visible');
+      repoSection.style.display = 'none';
+
+      // Build results header
+      var totalLines = 0;
+      searchData.forEach(function(g) { g.items.forEach(function(it) { totalLines += it.lines.length; }); });
+      document.getElementById('results-header').innerHTML =
+        '搜索 <strong>fulltext:<span class="query-term">' + query + '</span></strong>（结果 1 — ' + totalLines + ' 条，共 ' + totalLines + ' 条）按相关度排序';
+
+      // Build results list
+      var html = '';
+      searchData.forEach(function(group) {
+        // Group header with count
+        var fileCount = group.items.length;
+        html += '<div class="result-group-header">';
+        html += '<span>' + group.group + '</span>';
+        html += '<span class="group-count">' + fileCount + '</span>';
+        html += '</div>';
+
+        // Each file as a separate card
+        group.items.forEach(function(item) {
+          html += '<div class="result-file-card">';
+
+          // File header with actions
+          html += '<div class="result-file-header">';
+          html += '<a href="code-view.html?file=' + encodeURIComponent(item.name) + '" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;text-decoration:none;">';
+          html += '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+          html += '<span class="file-path">' + item.name + '</span>';
+          html += '</a>';
+          html += '<div class="file-actions">';
+          html += '<a href="code-view.html?file=' + encodeURIComponent(item.name) + '&view=history" class="action-btn" title="History"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>History</a>';
+          html += '<a href="code-view.html?file=' + encodeURIComponent(item.name) + '&view=annotate" class="action-btn" title="Annotate"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Annotate</a>';
+          html += '<a href="code-view.html?file=' + encodeURIComponent(item.name) + '&action=download" class="action-btn" title="Download"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>';
+          html += '</div>';
+          html += '</div>';
+
+          // Code lines
+          html += '<div class="result-lines">';
+          item.lines.forEach(function(line) {
+            html += '<a href="code-view.html?file=' + encodeURIComponent(item.name) + '&line=' + line.num + '" class="result-line"><span class="line-num">' + line.num + '</span><span class="line-code">' + line.code + '</span></a>';
+          });
+          html += '</div>';
+
+          html += '</div>';
+        });
+      });
+      document.getElementById('results-list').innerHTML = html;
+
+      // Scroll to results smoothly
+      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function clearSearch() {
+      document.getElementById('results-section').classList.remove('visible');
+      document.getElementById('repo-section').style.display = '';
+      document.getElementById('full-search').value = '';
+      document.querySelectorAll('.adv-input').forEach(function(i) { i.value = ''; });
+      document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('selected'); });
+    }
+
+    // ── Sort toggle ──
+    function changeSort(el) {
+      document.querySelectorAll('.sort-option').forEach(function(b) { b.classList.remove('active'); });
+      el.classList.add('active');
+    }
+
+    // ── Pagination ─
+    document.querySelectorAll('.pagination .page-btn:not(.nav-btn)').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.pagination .page-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+      });
+    });
+
+    // ─ Advanced search toggle ──
+    function toggleAdvanced() {
+      var panel = document.getElementById('advanced-panel');
+      var btn = document.getElementById('adv-toggle');
+      panel.classList.toggle('open');
+      btn.classList.toggle('active');
+    }
+
+    // ─ Project chip toggle ──
+    function toggleChip(el) { el.classList.toggle('selected'); }
+    function selectAll() { document.querySelectorAll('.chip').forEach(function(c) { c.classList.add('selected'); }); }
+    function invertAll() { document.querySelectorAll('.chip').forEach(function(c) { c.classList.toggle('selected'); }); }
+
+    // ── Keyboard shortcut: Cmd/Ctrl+K ──
+    document.addEventListener('keydown', function(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('full-search').focus();
+      }
+    });
+
+    // ── Enter on primary search → show results inline ──
+    document.getElementById('full-search').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && this.value.trim()) { performSearch(); }
+    });
+
+    // ── Search button in advanced panel ──
+    document.querySelector('.adv-actions .btn-primary').addEventListener('click', function(e) {
+      e.preventDefault();
+      performSearch();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diff Detail: main.kt — OpenGrok Code Search</title>
+  <style>
+    :root {
+      --bg:        #f6f8fa;
+      --surface:   #ffffff;
+      --fg:        #24292f;
+      --muted:     #57606a;
+      --border:    #d0d7de;
+      --border-light: #eaeef2;
+      --accent:    #0969da;
+      --accent-dim: rgba(9,105,218,0.08);
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═ Header ══ */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo {
+      width: 28px; height: 28px;
+      background: var(--fg);
+      border-radius: 7px;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+    }
+    .header-logo svg {
+      width: 14px; height: 14px;
+      stroke: #60a5fa; fill: none; stroke-width: 2.5;
+    }
+    .header-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .header-title a { color: inherit; text-decoration: none; }
+    .header-title a:hover { color: var(--accent); }
+    .header-title span { color: var(--muted); font-weight: 400; }
+
+    /* ═ Compact Nav ═ */
+    .compact-nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      gap: 12px;
+    }
+    .compact-nav-left { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+    .nav-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 14px;
+      border-radius: 6px;
+      color: var(--fg);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 13px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .nav-pill:hover { background: var(--accent-dim); color: var(--accent); }
+    .nav-pill svg {
+      width: 14px; height: 14px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    .nav-label { display: inline; }
+    .compact-nav-right { display: flex; align-items: center; gap: 8px; }
+    .search-group {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .search-group:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .search-group .search-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-group .search-input-wrap svg {
+      position: absolute;
+      left: 8px;
+      width: 14px; height: 14px;
+      stroke: var(--muted); fill: none; stroke-width: 2;
+      pointer-events: none;
+    }
+    .search-group .search-input {
+      width: 170px;
+      height: 30px;
+      border: none;
+      padding: 0 8px 0 28px;
+      font-size: 12.5px;
+      font-family: var(--font-sans);
+      outline: none;
+      background: transparent;
+    }
+    .search-group .search-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 30px;
+      padding: 0 14px;
+      border: none;
+      border-left: 1px solid var(--border);
+      border-radius: 0 5px 5px 0;
+      background: var(--bg);
+      color: var(--fg);
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s;
+      white-space: nowrap;
+    }
+    .search-group .search-btn:hover { background: #f3f4f6; }
+
+    .compact-nav-right .current-dir-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12.5px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: background 0.12s;
+    }
+    .compact-nav-right .current-dir-label:hover { background: #f6f8fa; }
+    .compact-nav-right .current-dir-label input[type="checkbox"] {
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    /* ═ File Path ═══ */
+    .file-path {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 24px;
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+      flex-wrap: wrap;
+    }
+    .file-path a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .file-path a:hover { text-decoration: underline; }
+    .file-path .path-sep { color: var(--border); flex-shrink: 0; }
+    .file-path .path-current { color: var(--fg); font-weight: 500; white-space: nowrap; }
+    .file-path .revision {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .file-path .revision span {
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+    /* ═ Toolbar ═══ */
+    .toolbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .toolbar-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--fg);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.12s, border-color 0.12s;
+      white-space: nowrap;
+    }
+    .toolbar-btn:hover {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .toolbar-btn svg {
+      width: 15px; height: 15px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+
+    /* ═ Footer ══ */
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 16px 0 24px;
+    }
+    .footer a { color: var(--accent); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+
+    /* ═ Diff Section ═══ */
+    .diff-section {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* — Diff Toolbar — */
+    .diff-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--border-light);
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .diff-toolbar-left,
+    .diff-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .diff-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--fg);
+      font-size: 12.5px;
+      font-weight: 500;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+    .diff-btn:hover {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .diff-btn.diff-btn-active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .diff-btn.diff-btn-active:hover {
+      background: #0860c8;
+    }
+    .diff-btn-diff-deleted {
+      border-color: #d73a49;
+      color: #d73a49;
+    }
+    .diff-btn-diff-deleted:hover,
+    .diff-btn-diff-deleted.diff-btn-active {
+      background: #d73a49;
+      color: #fff;
+      border-color: #d73a49;
+    }
+    .diff-btn-diff-added {
+      border-color: #2da44e;
+      color: #2da44e;
+    }
+    .diff-btn-diff-added:hover,
+    .diff-btn-diff-added.diff-btn-active {
+      background: #2da44e;
+      color: #fff;
+      border-color: #2da44e;
+    }
+    .diff-btn svg {
+      width: 13px; height: 13px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+
+    /* — Diff View Mode Tabs (sdiff / udiff / text) — */
+    .diff-view-tabs {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .diff-view-tab {
+      padding: 5px 16px;
+      border: none;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--fg);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+    .diff-view-tab:last-child {
+      border-right: none;
+    }
+    .diff-view-tab:hover {
+      background: #f0f4f8;
+    }
+    .diff-view-tab-active {
+      background: #d4edda;
+      color: #1a5c2a;
+      font-weight: 600;
+    }
+    .diff-view-tab-active:hover {
+      background: #c3e6cb;
+    }
+    .diff-revision {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .diff-revision .rev-hash { color: var(--fg); font-weight: 500; }
+
+    /* — Diff Panels — */
+    .diff-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 420px;
+    }
+    .diff-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .diff-panel:first-child {
+      border-right: 1px solid var(--border);
+    }
+    .diff-panel-header {
+      padding: 7px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border-light);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .diff-panel-header .panel-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .diff-panel-old .panel-tag {
+      background: #ffebe9;
+      color: #d73a49;
+    }
+    .diff-panel-new .panel-tag {
+      background: #e6ffec;
+      color: #2da44e;
+    }
+    .diff-code {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.6;
+      counter-reset: diff-line;
+    }
+    .diff-line {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      min-height: 20px;
+    }
+    .diff-line-num {
+      text-align: right;
+      padding: 0 10px 0 8px;
+      color: var(--border);
+      user-select: none;
+      font-size: 11.5px;
+      line-height: 1.6;
+      border-right: 1px solid var(--border-light);
+      white-space: nowrap;
+    }
+    .diff-line-content {
+      padding: 0 16px;
+      white-space: pre;
+      overflow-x: auto;
+    }
+    .diff-line-add {
+      background: #e6ffec;
+    }
+    .diff-line-add .diff-line-num {
+      color: #2da44e;
+      background: #dcfce7;
+      border-right-color: #bbf7d0;
+    }
+    .diff-line-add .diff-line-content { color: #0a3d1a; }
+    .diff-line-del {
+      background: #ffebe9;
+    }
+    .diff-line-del .diff-line-num {
+      color: #d73a49;
+      background: #ffeef0;
+      border-right-color: #ffc1c5;
+    }
+    .diff-line-del .diff-line-content {
+      color: #630c14;
+      text-decoration: line-through;
+      text-decoration-color: rgba(215,58,73,0.35);
+    }
+    .diff-line-ctx .diff-line-content { color: var(--fg); }
+
+    /* syntax highlight tokens */
+    .tok-kw { color: #cf222e; font-weight: 500; }   /* keyword */
+    .tok-str { color: #0a3069; }                      /* string */
+    .tok-cmt { color: #6e7781; font-style: italic; }  /* comment */
+    .tok-type { color: #953800; }                     /* type */
+    .tok-fn { color: #8250df; }                       /* function */
+    .tok-num { color: #0550ae; }                      /* number */
+    .tok-ann { color: #116329; }                      /* annotation */
+
+    /* ═ Responsive — Tablet ══ */
+    @media (max-width: 900px) {
+      .header, .compact-nav, .file-path, .toolbar { padding-left: 16px; padding-right: 16px; }
+    }
+
+    /* ═ Responsive — Mobile ═ */
+    @media (max-width: 600px) {
+      .header { padding: 8px 12px; }
+      .header-title { font-size: 14px; }
+      .nav-label, .dir-label, .search-label { display: none; }
+      .compact-nav { padding: 6px 12px; gap: 6px; flex-wrap: nowrap; }
+      .compact-nav-left { gap: 2px; flex-shrink: 0; }
+      .nav-pill { padding: 6px; border-radius: 6px; gap: 0; }
+      .nav-pill svg { width: 16px; height: 16px; }
+      .compact-nav-right { gap: 6px; flex-shrink: 0; }
+      .search-group { flex: 1; min-width: 0; }
+      .search-group .search-input { width: 70px; min-width: 0; font-size: 12px; }
+      .search-group .search-btn { padding: 0 8px; gap: 0; }
+      .search-btn-icon { display: block; width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+      .compact-nav-right .current-dir-label { font-size: 0; padding: 5px; gap: 0; flex-shrink: 0; }
+      .compact-nav-right .current-dir-label input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
+      .file-path { padding: 5px 12px; font-size: 11.5px; }
+      .toolbar { padding: 8px 12px; gap: 6px; }
+      .toolbar-btn { padding: 6px 12px; font-size: 12px; }
+      .toolbar-btn svg { width: 14px; height: 14px; }
+      .diff-toolbar { padding-left: 12px; padding-right: 12px; }
+      .diff-btn { padding: 4px 10px; font-size: 11.5px; }
+      .diff-view-tab { padding: 4px 10px; font-size: 11.5px; }
+      .diff-panels { grid-template-columns: 1fr; }
+      .diff-panel:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+      .diff-code { max-height: 300px; }
+      .footer { font-size: 11px; padding: 12px 0 20px; }
+    }
+
+    /* Very small screens (≤380px) */
+    @media (max-width: 380px) {
+      .search-group .search-input-wrap { display: none; }
+      .search-group .search-btn { border-radius: 6px; border: 1px solid var(--border); padding: 6px; }
+      .search-btn-icon { display: block; width: 16px; height: 16px; stroke: var(--fg); fill: none; stroke-width: 2; }
+      .compact-nav-right .current-dir-label { padding: 4px; }
+      .compact-nav-right .current-dir-label input[type="checkbox"] { width: 18px; height: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header" data-od-id="page-header">
+    <div class="header-logo">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+    </div>
+    <div class="header-title">
+      <a href="index.html">OpenGrok</a> <span>Code Search</span>
+    </div>
+  </header>
+
+  <!-- Compact Nav -->
+  <div class="compact-nav" data-od-id="compact-nav">
+    <div class="compact-nav-left">
+      <a href="index.html" class="nav-pill" data-od-id="nav-home">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="nav-label">Home</span>
+      </a>
+      <a href="file-diff-detail.html" class="nav-pill" data-od-id="nav-history">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="nav-label">History</span>
+      </a>
+    </div>
+    <div class="compact-nav-right">
+      <div class="search-group">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          <input type="text" class="search-input" placeholder="Search..." />
+        </div>
+        <a href="index.html" class="search-btn" data-od-id="nav-search-btn">
+          <svg class="search-btn-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          <span class="search-label">Search</span>
+        </a>
+      </div>
+      <label class="current-dir-label">
+        <input type="checkbox" checked /> <span class="dir-label">current directory</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- File Path Breadcrumb -->
+  <nav class="file-path" data-od-id="file-path">
+    <a href="index.html">Home</a>
+    <span class="path-sep">/</span>
+    <a href="directory-view.html">android-arch</a>
+    <span class="path-sep">/</span>
+    <a href="directory-view.html">architecture-components</a>
+    <span class="path-sep">/</span>
+    <a href="directory-view.html">app</a>
+    <span class="path-sep">/</span>
+    <a href="directory-view.html">src</a>
+    <span class="path-sep">/</span>
+    <a href="directory-view.html">main</a>
+    <span class="path-sep">/</span>
+    <a href="directory-view.html">java</a>
+    <span class="path-sep">/</span>
+    <span class="path-current">main.kt</span>
+    <span class="revision" title="2aa98865004f3d565dd1f972c4b6bdb831252463">revision: <span>2aa9886</span></span>
+  </nav>
+
+  <!-- Toolbar -->
+  <div class="toolbar" data-od-id="toolbar">
+    <a href="#" class="toolbar-btn" data-od-id="btn-annotate">
+      <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Annotate
+    </a>
+    <a href="#" class="toolbar-btn" data-od-id="btn-raw">
+      <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      Raw
+    </a>
+    <a href="#" class="toolbar-btn" data-od-id="btn-download">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download
+    </a>
+  </div>
+
+  <!-- Diff Content Section -->
+  <section class="diff-section" data-od-id="diff-content">
+
+    <!-- Diff Toolbar -->
+    <div class="diff-toolbar" data-od-id="diff-toolbar">
+      <div class="diff-toolbar-left">
+        <button class="diff-btn diff-btn-diff-deleted diff-btn-active" data-od-id="diff-btn-deleted">
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Deleted
+        </button>
+        <button class="diff-btn diff-btn-diff-added diff-btn-active" data-od-id="diff-btn-added">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Added
+        </button>
+        <!-- Diff view mode tabs -->
+        <div class="diff-view-tabs">
+          <button class="diff-view-tab diff-view-tab-active" data-od-id="diff-tab-sdiff">sdiff</button>
+          <button class="diff-view-tab" data-od-id="diff-tab-udiff">udiff</button>
+          <button class="diff-view-tab" data-od-id="diff-tab-text">text</button>
+        </div>
+        <span class="diff-revision">old (<span class="rev-hash">57f4456</span>)</span>
+        <span class="diff-revision">new (<span class="rev-hash">2aa0896</span>)</span>
+      </div>
+      <div class="diff-toolbar-right">
+        <button class="diff-btn diff-btn-active" data-od-id="diff-view-full">Full</button>
+        <button class="diff-btn" data-od-id="diff-view-compact">compact</button>
+        <button class="diff-btn" data-od-id="diff-view-jumper">jumper</button>
+        <a href="#" class="diff-btn" data-od-id="diff-download">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          download diff
+        </a>
+      </div>
+    </div>
+
+    <!-- Diff Panels -->
+    <div class="diff-panels" data-od-id="diff-panels">
+
+      <!-- Old version -->
+      <div class="diff-panel diff-panel-old">
+        <div class="diff-panel-header">
+          <span class="panel-tag">old</span>git/src/main/ktMain.kt
+        </div>
+        <div class="diff-code" data-od-id="diff-code-old">
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">1</span><span class="diff-line-content"><span class="tok-ann">@file</span>:<span class="tok-fn">JvmName</span>(<span class="tok-str">"Main"</span>)</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">2</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">3</span><span class="diff-line-content"><span class="tok-kw">package</span> example</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">4</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-del"><span class="diff-line-num">5</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.core.CliktCommand</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">6</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.core.subcommands</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">7</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.options.default</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">8</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.options.flag</span></div>
+          <div class="diff-line diff-line-del"><span class="diff-line-num">9</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.options.option</span></div>
+          <div class="diff-line diff-line-del"><span class="diff-line-num">10</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.types.int</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">11</span><span class="diff-line-content"><span class="tok-kw">import</span> kotlinx.coroutines.Dispatchers</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">12</span><span class="diff-line-content"><span class="tok-kw">import</span> kotlinx.coroutines.launch</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">13</span><span class="diff-line-content"><span class="tok-kw">import</span> kotlinx.coroutines.runBlocking</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">14</span><span class="diff-line-content"><span class="tok-kw">import</span> okhttp3.OkHttpClient</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">15</span><span class="diff-line-content"><span class="tok-kw">import</span> okhttp3.Request</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">16</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">17</span><span class="diff-line-content"><span class="tok-kw">fun</span> <span class="tok-fn">main</span>(vararg args: <span class="tok-type">String</span>) = <span class="tok-fn">MainCommand</span>().main(args)</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">18</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">19</span><span class="diff-line-content"><span class="tok-kw">class</span> <span class="tok-type">MainCommand</span> : <span class="tok-fn">CliktCommand</span>() {</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">20</span><span class="diff-line-content">    <span class="tok-kw">private val</span> verbose <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"-v"</span>, <span class="tok-str">"--verbose"</span>).flag()</span></div>
+          <div class="diff-line diff-line-del"><span class="diff-line-num">21</span><span class="diff-line-content">    <span class="tok-kw">private val</span> count <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"-c"</span>, <span class="tok-str">"--count"</span>).int().default(<span class="tok-num">1</span>)</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">22</span><span class="diff-line-content">    <span class="tok-kw">private val</span> all <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"--all"</span>).flag()</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">23</span><span class="diff-line-content">    <span class="tok-kw">private val</span> force <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"-f"</span>).flag()</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">24</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">25</span><span class="diff-line-content">    <span class="tok-kw">override fun</span> <span class="tok-fn">run</span>() {</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">26</span><span class="diff-line-content">        <span class="tok-kw">if</span> (verbose) echo(<span class="tok-str">"Verbose mode"</span>)</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">27</span><span class="diff-line-content">        <span class="tok-cmt">// execute command</span></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">28</span><span class="diff-line-content">    }</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">29</span><span class="diff-line-content">}</span></div>
+        </div>
+      </div>
+
+      <!-- New version -->
+      <div class="diff-panel diff-panel-new">
+        <div class="diff-panel-header">
+          <span class="panel-tag">new</span>git/src/main/ktMain.kt
+        </div>
+        <div class="diff-code" data-od-id="diff-code-new">
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">1</span><span class="diff-line-content"><span class="tok-ann">@file</span>:<span class="tok-fn">JvmName</span>(<span class="tok-str">"Main"</span>)</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">2</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">3</span><span class="diff-line-content"><span class="tok-kw">package</span> example</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">4</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">5</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.core.CliktCommand</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">6</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.core.subcommands</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">7</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.options.default</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">8</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.options.flag</span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">9</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.options.option</span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">10</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.options.required</span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">11</span><span class="diff-line-content"><span class="tok-kw">import</span> com.github.ajalt.clikt.parameters.types.int</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">12</span><span class="diff-line-content"><span class="tok-kw">import</span> kotlinx.coroutines.Dispatchers</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">13</span><span class="diff-line-content"><span class="tok-kw">import</span> kotlinx.coroutines.launch</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">14</span><span class="diff-line-content"><span class="tok-kw">import</span> kotlinx.coroutines.runBlocking</span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">15</span><span class="diff-line-content"><span class="tok-kw">import</span> kotlinx.coroutines.withContext</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">16</span><span class="diff-line-content"><span class="tok-kw">import</span> okhttp3.OkHttpClient</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">17</span><span class="diff-line-content"><span class="tok-kw">import</span> okhttp3.Request</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">18</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">19</span><span class="diff-line-content"><span class="tok-kw">fun</span> <span class="tok-fn">main</span>(vararg args: <span class="tok-type">String</span>) = <span class="tok-fn">MainCommand</span>().main(args)</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">20</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">21</span><span class="diff-line-content"><span class="tok-kw">class</span> <span class="tok-type">MainCommand</span> : <span class="tok-fn">CliktCommand</span>() {</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">22</span><span class="diff-line-content">    <span class="tok-kw">private val</span> verbose <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"-v"</span>, <span class="tok-str">"--verbose"</span>).flag()</span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">23</span><span class="diff-line-content">    <span class="tok-kw">private val</span> count <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"-c"</span>, <span class="tok-str">"--count"</span>).int().required()</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">24</span><span class="diff-line-content">    <span class="tok-kw">private val</span> all <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"--all"</span>).flag()</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">25</span><span class="diff-line-content">    <span class="tok-kw">private val</span> force <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"-f"</span>).flag()</span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">26</span><span class="diff-line-content">    <span class="tok-kw">private val</span> output <span class="tok-kw">by</span> <span class="tok-fn">option</span>(<span class="tok-str">"-o"</span>, <span class="tok-str">"--output"</span>).default(<span class="tok-str">"stdout"</span>)</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">27</span><span class="diff-line-content"></span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">28</span><span class="diff-line-content">    <span class="tok-kw">override fun</span> <span class="tok-fn">run</span>() {</span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">29</span><span class="diff-line-content">        <span class="tok-kw">if</span> (verbose) echo(<span class="tok-str">"Verbose mode enabled"</span>)</span></div>
+          <div class="diff-line diff-line-del"><span class="diff-line-num">30</span><span class="diff-line-content">        <span class="tok-cmt">// execute command</span></span></div>
+          <div class="diff-line diff-line-add"><span class="diff-line-num">31</span><span class="diff-line-content">        runBlocking { <span class="tok-fn">withContext</span>(Dispatchers.IO) { <span class="tok-fn">execute</span>() } }</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">32</span><span class="diff-line-content">    }</span></div>
+          <div class="diff-line diff-line-ctx"><span class="diff-line-num">33</span><span class="diff-line-content">}</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <div class="footer" data-od-id="page-footer">
+    由 <a href="#">OpenGrok</a> 托管 &nbsp;·&nbsp; 最后索引更新：2026 年 2 月 15 日 15:06 CST
+  </div>
+
+</body>
+</html>

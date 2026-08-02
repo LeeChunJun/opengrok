@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>History Log - architecture-components - OpenGrok Code Search</title>
+  <style>
+    :root {
+      --bg:        #f6f8fa;
+      --surface:   #ffffff;
+      --fg:        #24292f;
+      --muted:     #57606a;
+      --border:    #d0d7de;
+      --border-light: #eaeef2;
+      --accent:    #0969da;
+      --accent-dim: rgba(9,105,218,0.08);
+      --green:     #1a7f37;
+      --green-bg:  #dafbe1;
+      --red:       #cf222e;
+      --red-bg:    #ffebe9;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═ Header ═══ */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo {
+      width: 28px; height: 28px;
+      background: var(--fg);
+      border-radius: 7px;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+    }
+    .header-logo svg {
+      width: 14px; height: 14px;
+      stroke: #60a5fa; fill: none; stroke-width: 2.5;
+    }
+    .header-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .header-title a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .header-title a:hover { color: var(--accent); }
+    .header-title span {
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    /* ═ Compact Nav ═══ */
+    .compact-nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      gap: 12px;
+    }
+    .compact-nav-left {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .nav-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 14px;
+      border-radius: 6px;
+      color: var(--fg);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 13px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .nav-pill:hover {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .nav-pill.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .nav-pill.active:hover {
+      background: #0860c7;
+    }
+    .nav-pill svg {
+      width: 14px; height: 14px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+
+    .compact-nav-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .search-group {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .search-group:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .search-group .search-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-group .search-input-wrap svg {
+      position: absolute;
+      left: 8px;
+      width: 14px; height: 14px;
+      stroke: var(--muted); fill: none; stroke-width: 2;
+      pointer-events: none;
+    }
+    .search-group .search-input {
+      width: 170px;
+      height: 30px;
+      border: none;
+      padding: 0 8px 0 28px;
+      font-size: 12.5px;
+      font-family: var(--font-sans);
+      outline: none;
+      background: transparent;
+    }
+    .search-group .search-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 30px;
+      padding: 0 14px;
+      border: none;
+      border-left: 1px solid var(--border);
+      border-radius: 0 5px 5px 0;
+      background: var(--bg);
+      color: var(--fg);
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s;
+      white-space: nowrap;
+    }
+    .search-group .search-btn:hover { background: #f3f4f6; }
+
+    .compact-nav-right .current-dir-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12.5px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: background 0.12s;
+    }
+    .compact-nav-right .current-dir-label:hover {
+      background: #f6f8fa;
+    }
+    .compact-nav-right .current-dir-label input[type="checkbox"] {
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    /*  Breadcrumb Path ═══ */
+    .dir-path {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 24px;
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dir-path a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .dir-path a:hover { text-decoration: underline; }
+    .dir-path .path-sep { color: var(--border); }
+    .dir-path .path-current {
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+    /*  Main Content ═══ */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Title line */
+    .history-title {
+      font-size: 14px;
+      color: var(--fg);
+      margin-bottom: 16px;
+      font-weight: 400;
+    }
+    .history-title strong {
+      font-weight: 600;
+    }
+    .history-title .path {
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    /* ═ History Table (classic OpenGrok style) ═══ */
+    .history-table-wrapper {
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .history-table thead th {
+      text-align: left;
+      padding: 6px 10px;
+      font-weight: 600;
+      color: var(--fg);
+      border-bottom: 2px solid var(--border);
+      font-size: 13px;
+      white-space: nowrap;
+      vertical-align: bottom;
+    }
+    .history-table thead th:first-child {
+      padding-left: 10px;
+    }
+
+    .history-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: top;
+    }
+
+    .history-table tbody tr:hover {
+      background: #f6f8fa;
+    }
+
+    /* Column widths */
+    .col-revision { width: 100px; }
+    .col-date     { width: 70px; }
+    .col-author   { width: 260px; }
+    .col-comments { width: auto; }
+
+    /* Revision cell */
+    .revision-hash {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .revision-hash:hover {
+      text-decoration: underline;
+    }
+
+    /* Date cell */
+    .date-day {
+      font-size: 13px;
+      color: var(--fg);
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    .date-year {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Author cell */
+    .author-name {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .author-email {
+      font-size: 11.5px;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    /* Comments cell */
+    .comment-entry {
+      margin-bottom: 4px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .comment-entry::before {
+      content: '• ';
+      color: var(--muted);
+    }
+    .comment-entry.bullet::before {
+      content: '* ';
+      color: var(--muted);
+    }
+    .co-authored {
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-top: 6px;
+      margin-bottom: 4px;
+    }
+    .show-more {
+      font-size: 12px;
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      margin: 2px 0 4px;
+    }
+    .show-more:hover { text-decoration: underline; }
+    .modified-files {
+      margin-top: 6px;
+      padding-top: 4px;
+      border-top: 1px dashed var(--border-light);
+    }
+    .modified-files a {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--accent);
+      text-decoration: none;
+      line-height: 1.6;
+    }
+    .modified-files a:hover {
+      text-decoration: underline;
+    }
+    .hide-modified {
+      font-size: 12px;
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .hide-modified:hover { text-decoration: underline; }
+
+    /* ═ Pagination ═══ */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 20px 0 8px;
+    }
+    .page-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+      font-family: var(--font-sans);
+      font-weight: 500;
+      color: var(--fg);
+      cursor: pointer;
+      transition: all 0.12s;
+      text-decoration: none;
+    }
+    .page-btn:hover {
+      background: #f3f4f6;
+      border-color: #ccc;
+    }
+    .page-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .page-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 16px 0 24px;
+    }
+    .footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .footer a:hover { text-decoration: underline; }
+
+    /* ═ Responsive — Tablet ══ */
+    @media (max-width: 768px) {
+      .header { padding: 10px 16px; }
+      .compact-nav { padding: 8px 16px; font-size: 12px; }
+      .container { padding: 16px; }
+      .history-table th, .history-table td { padding: 6px 8px; font-size: 12.5px; }
+    }
+
+    /* ═ Responsive — Mobile ═══ */
+    @media (max-width: 600px) {
+      .header { padding: 8px 12px; }
+      .header-title { font-size: 14px; }
+
+      /* Hide text labels — icon-only on mobile */
+      .nav-label,
+      .dir-label,
+      .search-label { display: none; }
+
+      .compact-nav { padding: 6px 12px; gap: 6px; flex-wrap: nowrap; }
+      .compact-nav-left { gap: 2px; flex-shrink: 0; }
+      .nav-pill { padding: 6px; border-radius: 6px; gap: 0; }
+      .nav-pill svg { width: 16px; height: 16px; }
+
+      .compact-nav-right { gap: 6px; flex-shrink: 0; }
+      .search-group { flex: 1; min-width: 0; }
+      .search-group .search-input { width: 70px; min-width: 0; font-size: 12px; }
+      .search-group .search-btn {
+        padding: 0 8px;
+        gap: 0;
+      }
+      .search-btn-icon { display: block; width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+      .compact-nav-right .current-dir-label { font-size: 0; padding: 5px; gap: 0; flex-shrink: 0; border: 1px solid var(--border); }
+      .compact-nav-right .current-dir-label input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
+
+      .dir-path { padding: 5px 12px; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      .container { padding: 12px; }
+      .history-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .history-table { min-width: 600px; font-size: 13px; }
+      .col-author { width: 200px; }
+      .col-date { width: 60px; }
+    }
+
+    @media (max-width: 380px) {
+      .search-group .search-input-wrap { display: none; }
+      .search-group .search-btn {
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        padding: 6px;
+      }
+      .search-btn-icon { display: block; width: 16px; height: 16px; stroke: var(--fg); fill: none; stroke-width: 2; }
+      .compact-nav-right .current-dir-label { padding: 4px; }
+      .compact-nav-right .current-dir-label input[type="checkbox"] { width: 18px; height: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-logo">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+    </div>
+    <div class="header-title">
+      <a href="index.html">OpenGrok</a> <span>Code Search</span>
+    </div>
+  </header>
+
+  <!-- Compact Nav (matches directory-view.html) -->
+  <div class="compact-nav">
+    <div class="compact-nav-left">
+      <a href="index.html" class="nav-pill">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="nav-label">Home</span>
+      </a>
+      <a href="directory-history.html" class="nav-pill active">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="nav-label">History</span>
+      </a>
+    </div>
+    <div class="compact-nav-right">
+      <div class="search-group">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          <input type="text" class="search-input" placeholder="Search..." />
+        </div>
+        <a href="index.html" class="search-btn"><svg class="search-btn-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><span class="search-label">Search</span></a>
+      </div>
+      <label class="current-dir-label">
+        <input type="checkbox" checked /> <span class="dir-label">current directory</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Breadcrumb Path -->
+  <div class="dir-path">
+    <a href="index.html">Home</a>
+    <span class="path-sep">/</span>
+    <a href="directory-view.html">android-arch</a>
+    <span class="path-sep">/</span>
+    <span class="path-current">architecture-components</span>
+  </div>
+
+  <!-- Main Content -->
+  <div class="container">
+
+    <!-- Title -->
+    <div class="history-title" data-od-id="history-title">
+      History log of <span class="path">/android-arch/architecture-components/</span> (Results <strong>1 — 25</strong> of <strong>284</strong>)
+    </div>
+
+    <!-- History Table -->
+    <div class="history-table-wrapper">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th class="col-revision">Revision</th>
+            <th class="col-date">Date</th>
+            <th class="col-author">Author</th>
+            <th class="col-comments">Comments <a href="#" class="hide-modified" onclick="toggleModifiedFiles(); return false;">&lt;&lt;&lt; Hide modified files</a></th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody">
+          <!-- Rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      <button class="page-btn" disabled>‹</button>
+      <button class="page-btn active">1</button>
+      <button class="page-btn">2</button>
+      <button class="page-btn">3</button>
+      <button class="page-btn">›</button>
+    </div>
+
+    <div class="footer">
+      由 <a href="#">OpenGrok</a> 托管 · 最后索引更新：2026 年 2 月 15 日
+    </div>
+
+  </div>
+
+  <script>
+    // ── History data ──
+    var historyData = [
+      {
+        hash: 'fd669d65',
+        date: { day: '04-12', year: '月-2025' },
+        author: 'renovate[bot]',
+        email: '<29139614+renovate[bot]@users.noreply.github.com>',
+        comments: [
+          { text: 'Update dependency androidx.compose.runtime:runtime to v1.10.0 (#1054)', type: 'entry' },
+          { text: 'Update dependency androidx.compose.runtime:runtime to v1.10.0', type: 'bullet' },
+          { text: 'Remove manual constraint', type: 'bullet' },
+        ],
+        separator: '--------',
+        coAuthored: 'Co-authored-by: renovate',
+        showMore: true,
+        modifiedFiles: [
+          '/mosaic/.github/renovate.json5',
+          '/mosaic/gradle/workflows/release.yaml',
+          '/mosaic/gradle/libs.versions.toml',
+          '/build.gradle',
+          '/mosaic/mosaic-tty/build.gradle',
+        ],
+      },
+      {
+        hash: '2a488b5f',
+        date: { day: '04-10', year: '月-2025' },
+        author: 'renovate[bot]',
+        email: '<29139614+renovate[bot]@users.noreply.github.com>',
+        comments: [
+          { text: 'Update dependency com.pinterest.ktlint:ktlint-cli to v1.8.0 (#1040)', type: 'entry' },
+          { text: 'Update dependency com.pinterest.ktlint:ktlint-cli to v1.8.0', type: 'bullet' },
+          { text: 'Bump compose-rules', type: 'bullet' },
+        ],
+        separator: '--------',
+        coAuthored: 'Co-authored-by: renovate[bot] <29139614+...>',
+        showMore: true,
+        modifiedFiles: [
+          '/mosaic/gradle/libs.versions.toml',
+          '/mosaic/build.gradle.kts',
+        ],
+      },
+      {
+        hash: '372cf187',
+        date: { day: '03-28', year: '月-2025' },
+        author: 'Jake Wharton',
+        email: '<github@jakewharton.com>',
+        comments: [
+          { text: 'Parse secondary attributes event', type: 'entry' },
+        ],
+        separator: null,
+        coAuthored: null,
+        showMore: false,
+        modifiedFiles: [
+          '/mosaic/mosaic-tty/src/main/kotlin/com/jakewharton/mosaic/tty/EventParser.kt',
+          '/mosaic/mosaic-tty/src/test/kotlin/EventParserTest.kt',
+        ],
+      },
+      {
+        hash: '52916127',
+        date: { day: '03-15', year: '月-2025' },
+        author: 'Jake Wharton',
+        email: '<github@jakewharton.com>',
+        comments: [
+          { text: 'Rewrite POSIX Tty to actually use the TTY', type: 'entry' },
+          { text: 'And a PTY for testing. Windows still uses stdin/stdout for now.', type: 'bullet' },
+        ],
+        separator: '--------',
+        coAuthored: null,
+        showMore: false,
+        modifiedFiles: [
+          '/mosaic/mosaic-tty/src/main/kotlin/com/jakewharton/mosaic/tty/Tty.kt',
+          '/mosaic/mosaic-tty/src/main/kotlin/com/jakewharton/mosaic/tty/PosixTty.kt',
+          '/mosaic/mosaic-tty/src/main/kotlin/com/jakewharton/mosaic/tty/WindowsTty.kt',
+        ],
+      },
+      {
+        hash: '765f4b2c',
+        date: { day: '03-01', year: '月-2025' },
+        author: 'Jake Wharton',
+        email: '<github@jakewharton.com>',
+        comments: [
+          { text: 'Return DebugEvent directly from nextDebug()', type: 'entry' },
+        ],
+        separator: null,
+        coAuthored: null,
+        showMore: false,
+        modifiedFiles: [
+          '/mosaic/mosaic-tty/src/main/kotlin/com/jakewharton/mosaic/tty/Event.kt',
+        ],
+      },
+      {
+        hash: 'd71455ea',
+        date: { day: '02-20', year: '月-2025' },
+        author: 'Jake Wharton',
+        email: '<github@jakewharton.com>',
+        comments: [
+          { text: 'Rename TerminalParser to EventParser', type: 'entry' },
+        ],
+        separator: null,
+        coAuthored: null,
+        showMore: false,
+        modifiedFiles: [
+          '/mosaic/mosaic-tty/src/main/kotlin/com/jakewharton/mosaic/tty/EventParser.kt',
+        ],
+      },
+      {
+        hash: 'a9441c33',
+        date: { day: '02-10', year: '月-2025' },
+        author: 'Jake Wharton',
+        email: '<github@jakewharton.com>',
+        comments: [
+          { text: 'Eliminate terminal event package', type: 'entry' },
+        ],
+        separator: null,
+        coAuthored: null,
+        showMore: false,
+        modifiedFiles: [
+          '/mosaic/mosaic-tty/src/main/kotlin/com/jakewharton/mosaic/tty/Event.kt',
+          '/mosaic/mosaic-tty/src/main/kotlin/com/jakewharton/mosaic/tty/Events.kt',
+        ],
+      },
+      {
+        hash: 'b8c3d2e1',
+        date: { day: '01-28', year: '月-2025' },
+        author: '张明',
+        email: '<zhangming@example.com>',
+        comments: [
+          { text: '重构依赖注入模块，提升代码可维护性', type: 'entry' },
+          { text: '添加单元测试覆盖', type: 'bullet' },
+          { text: '修复 Activity 重建时 DI 丢失的问题', type: 'bullet' },
+        ],
+        separator: '--------',
+        coAuthored: null,
+        showMore: true,
+        modifiedFiles: [
+          '/app/src/main/java/com/example/android/architecture/di/AppModule.kt',
+          '/app/src/main/java/com/example/android/architecture/di/ViewModelModule.kt',
+          '/app/src/test/java/com/example/android/architecture/di/AppModuleTest.kt',
+        ],
+      },
+      {
+        hash: 'c4d5e6f7',
+        date: { day: '01-15', year: '月-2025' },
+        author: '李华',
+        email: '<lihua@example.com>',
+        comments: [
+          { text: '添加 ViewModel 和 LiveData 支持', type: 'entry' },
+          { text: '实现 Repository 模式', type: 'bullet' },
+        ],
+        separator: null,
+        coAuthored: null,
+        showMore: false,
+        modifiedFiles: [
+          '/app/src/main/java/com/example/android/architecture/data/TaskRepository.kt',
+          '/app/src/main/java/com/example/android/architecture/ui/TaskViewModel.kt',
+        ],
+      },
+      {
+        hash: 'e7f8a9b0',
+        date: { day: '01-05', year: '月-2025' },
+        author: '王芳',
+        email: '<wangfang@example.com>',
+        comments: [
+          { text: '初始项目结构搭建', type: 'entry' },
+          { text: '配置 Gradle 构建系统', type: 'bullet' },
+          { text: '添加基础依赖', type: 'bullet' },
+        ],
+        separator: null,
+        coAuthored: null,
+        showMore: false,
+        modifiedFiles: [
+          '/build.gradle',
+          '/settings.gradle',
+          '/gradle.properties',
+          '/gradlew',
+          '/gradlew.bat',
+        ],
+      },
+    ];
+
+    // ── Render history table ──
+    function renderHistory() {
+      var tbody = document.getElementById('history-tbody');
+      var html = '';
+      historyData.forEach(function(item) {
+        html += '<tr>';
+
+        // Revision
+        html += '<td class="col-revision">';
+        html += '<a href="file-history-diff.html?rev=' + item.hash + '" class="revision-hash">' + item.hash + '</a>';
+        html += '</td>';
+
+        // Date
+        html += '<td class="col-date">';
+        html += '<div class="date-day">' + item.date.day + '</div>';
+        html += '<div class="date-year">' + item.date.year + '</div>';
+        html += '</td>';
+
+        // Author
+        html += '<td class="col-author">';
+        html += '<div class="author-name">' + item.author + '</div>';
+        html += '<div class="author-email">' + item.email + '</div>';
+        html += '</td>';
+
+        // Comments
+        html += '<td class="col-comments">';
+        item.comments.forEach(function(c) {
+          var cls = c.type === 'entry' ? 'comment-entry' : 'comment-entry bullet';
+          html += '<div class="' + cls + '">' + c.text + '</div>';
+        });
+        if (item.separator) {
+          html += '<div style="font-size:11px;color:var(--muted);margin:4px 0;">' + item.separator + '</div>';
+        }
+        if (item.coAuthored) {
+          html += '<div class="co-authored">' + item.coAuthored + '</div>';
+        }
+        if (item.showMore) {
+          html += '<a href="#" class="show-more" onclick="toggleShowMore(this); return false;">show more …</a>';
+        }
+        if (item.modifiedFiles && item.modifiedFiles.length) {
+          html += '<div class="modified-files" data-modified>';
+          item.modifiedFiles.forEach(function(f) {
+            html += '<a href="code-view.html?path=' + encodeURIComponent(f) + '">' + f + '</a>';
+          });
+          html += '</div>';
+        }
+        html += '</td>';
+
+        html += '</tr>';
+      });
+      tbody.innerHTML = html;
+    }
+
+    // ── Toggle modified files ──
+    function toggleModifiedFiles() {
+      var els = document.querySelectorAll('[data-modified]');
+      var link = document.querySelector('.hide-modified');
+      var hidden = false;
+      els.forEach(function(el) {
+        if (el.style.display === 'none') {
+          el.style.display = '';
+          hidden = false;
+        } else {
+          el.style.display = 'none';
+          hidden = true;
+        }
+      });
+      if (link) {
+        link.textContent = hidden ? '>>> Show modified files' : '<<< Hide modified files';
+      }
+    }
+
+    // ── Toggle show more ──
+    function toggleShowMore(el) {
+      var row = el.closest('tr');
+      var hidden = row.querySelectorAll('.comment-hidden');
+      hidden.forEach(function(h) {
+        h.style.display = h.style.display === 'none' ? '' : 'none';
+      });
+      el.textContent = el.textContent === 'show more …' ? 'show less' : 'show more …';
+    }
+
+    // ── Pagination ──
+    document.querySelectorAll('.pagination .page-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.pagination .page-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+      });
+    });
+
+    // ── Initialize ──
+    renderHistory();
+  </script>
+
+</body>
+</html>

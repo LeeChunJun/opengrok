@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>architecture-components - OpenGrok Code Search</title>
+  <style>
+    :root {
+      --bg:        #f6f8fa;
+      --surface:   #ffffff;
+      --fg:        #24292f;
+      --muted:     #57606a;
+      --border:    #d0d7de;
+      --border-light: #eaeef2;
+      --accent:    #0969da;
+      --accent-dim: rgba(9,105,218,0.08);
+      --green:     #1a7f37;
+      --green-bg:  #dafbe1;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═ Header ══ */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo {
+      width: 28px; height: 28px;
+      background: var(--fg);
+      border-radius: 7px;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+    }
+    .header-logo svg {
+      width: 14px; height: 14px;
+      stroke: #60a5fa; fill: none; stroke-width: 2.5;
+    }
+    .header-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .header-title a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .header-title a:hover { color: var(--accent); }
+    .header-title span {
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    /* ═ Main Content ═══ */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* ═ File Table ═══ */
+    .file-table-wrapper {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .file-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    .file-table thead { background: #fafbfc; }
+    .file-table th {
+      text-align: left;
+      padding: 10px 16px;
+      font-weight: 600;
+      color: var(--fg);
+      border-bottom: 1px solid var(--border);
+      font-size: 12.5px;
+      white-space: nowrap;
+    }
+    .file-table th.sortable { cursor: pointer; user-select: none; }
+    .file-table th.sortable:hover { background: #f3f4f6; }
+    .file-table th .sort-icon {
+      display: inline-block;
+      margin-left: 4px;
+      opacity: 0.4;
+      font-size: 10px;
+    }
+    .file-table th.sorted .sort-icon { opacity: 1; color: var(--accent); }
+    .file-table td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: middle;
+    }
+    .file-table tbody tr { transition: background 0.1s; }
+    .file-table tbody tr:hover { background: #f6f8fa; }
+    .file-table tbody tr:last-child td { border-bottom: none; }
+
+    .file-name { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+    .file-name a { color: var(--fg); text-decoration: none; }
+    .file-name a:hover { color: var(--accent); text-decoration: underline; }
+    .file-name svg {
+      width: 16px; height: 16px;
+      stroke: var(--muted); fill: none; stroke-width: 1.8;
+      flex-shrink: 0;
+    }
+    .file-name .dir-icon { stroke: var(--accent); }
+    .file-date { color: var(--muted); font-size: 13px; white-space: nowrap; }
+    .file-size { color: var(--muted); font-size: 13px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .file-lines { color: var(--muted); font-size: 13px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .file-loc { color: var(--muted); font-size: 13px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    /* ═ Responsive — Tablet ══ */
+    @media (max-width: 768px) {
+      .header { padding: 10px 16px; }
+      .compact-nav { padding: 6px 16px; font-size: 12px; }
+      .container { padding: 16px; }
+      .file-table th, .file-table td { padding: 8px 12px; font-size: 12.5px; }
+    }
+
+    /* ═ Responsive — Mobile ═══ */
+    @media (max-width: 600px) {
+      .header { padding: 8px 12px; }
+      .header-title { font-size: 14px; }
+
+      /* Hide text labels — icon-only on mobile */
+      .nav-label,
+      .dir-label,
+      .search-label { display: none; }
+
+      .compact-nav { padding: 6px 12px; gap: 6px; flex-wrap: nowrap; }
+      .compact-nav-left { gap: 2px; flex-shrink: 0; }
+      .nav-pill { padding: 6px; border-radius: 6px; gap: 0; }
+      .nav-pill svg { width: 16px; height: 16px; }
+
+      .compact-nav-right { gap: 6px; flex-shrink: 0; }
+      .search-group { flex: 1; min-width: 0; }
+      .search-group .search-input { width: 70px; min-width: 0; font-size: 12px; }
+      .search-group .search-btn {
+        padding: 0 8px;
+        gap: 0;
+      }
+      .search-btn-icon { display: block; width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+      .compact-nav-right .current-dir-label { font-size: 0; padding: 5px; gap: 0; flex-shrink: 0; border: 1px solid var(--border); }
+      .compact-nav-right .current-dir-label input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
+
+      .dir-path { padding: 5px 12px; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      .container { padding: 12px; }
+
+      .file-table-wrapper { border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .file-table { min-width: 520px; font-size: 13px; }
+      .file-table th { padding: 8px 10px; font-size: 12px; }
+      .file-table td { padding: 8px 10px; font-size: 12.5px; }
+      .file-table th:nth-child(5), .file-table td[data-label="LOC"] { display: none; }
+      .action-btn { width: 32px; height: 32px; }
+
+      .dir-footer { font-size: 11px; padding: 12px 0 20px; }
+    }
+
+    /* ═ Very small screens (≤380px) ══ */
+    @media (max-width: 380px) {
+      .search-group .search-input-wrap { display: none; }
+      .search-group .search-btn {
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        padding: 6px;
+      }
+      .search-btn-icon { display: block; width: 16px; height: 16px; stroke: var(--fg); fill: none; stroke-width: 2; }
+      .compact-nav-right .current-dir-label { padding: 4px; }
+      .compact-nav-right .current-dir-label input[type="checkbox"] { width: 18px; height: 18px; }
+    }
+
+    /* ═ Compact Nav — pill tabs + integrated search ══ */
+    .compact-nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      gap: 12px;
+    }
+    .compact-nav-left {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .nav-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 14px;
+      border-radius: 6px;
+      color: var(--fg);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 13px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .nav-pill:hover {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .nav-pill svg {
+      width: 14px; height: 14px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+
+    .compact-nav-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .search-group {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .search-group:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .search-group .search-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-group .search-input-wrap svg {
+      position: absolute;
+      left: 8px;
+      width: 14px; height: 14px;
+      stroke: var(--muted); fill: none; stroke-width: 2;
+      pointer-events: none;
+    }
+    .search-group .search-input {
+      width: 170px;
+      height: 30px;
+      border: none;
+      padding: 0 8px 0 28px;
+      font-size: 12.5px;
+      font-family: var(--font-sans);
+      outline: none;
+      background: transparent;
+    }
+    .search-group .search-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 30px;
+      padding: 0 14px;
+      border: none;
+      border-left: 1px solid var(--border);
+      border-radius: 0 5px 5px 0;
+      background: var(--bg);
+      color: var(--fg);
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s;
+      white-space: nowrap;
+    }
+    .search-group .search-btn:hover { background: #f3f4f6; }
+
+    .compact-nav-right .current-dir-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12.5px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: background 0.12s;
+    }
+    .compact-nav-right .current-dir-label:hover {
+      background: #f6f8fa;
+    }
+    .compact-nav-right .current-dir-label input[type="checkbox"] {
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    /*  Directory Path ═══ */
+    .dir-path {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 24px;
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dir-path a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .dir-path a:hover { text-decoration: underline; }
+    .dir-path .path-sep { color: var(--border); }
+    .dir-path .path-current {
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+        /*  Footer */
+    .dir-footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 16px 0 24px;
+    }
+    .dir-footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .dir-footer a:hover { text-decoration: underline; }
+
+    /* Action icon buttons */
+    .file-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      white-space: nowrap;
+    }
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 5px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.12s, color 0.12s;
+    }
+    .action-btn:hover {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .action-btn svg {
+      width: 15px; height: 15px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+
+    /* ═ Remove unused styles ═══ */
+    .loc-bar, .loc-bar-fill,
+    .dir-header, .summary-bar,
+    .pagination, .footer,
+    .breadcrumb, .toolbar, .toolbar-btn, .toolbar-sep,
+    .toolbar-search, .search-icon, .current-dir,
+    .page-btn { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-logo">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+    </div>
+    <div class="header-title">
+      <a href="index.html">OpenGrok</a> <span>Code Search</span>
+    </div>
+  </header>
+
+  <!-- Compact Nav (mobile-friendly toolbar) -->
+  <div class="compact-nav">
+    <div class="compact-nav-left">
+      <a href="index.html" class="nav-pill">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="nav-label">Home</span>
+      </a>
+      <a href="directory-history.html" class="nav-pill">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="nav-label">History</span>
+      </a>
+    </div>
+    <div class="compact-nav-right">
+      <div class="search-group">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          <input type="text" class="search-input" placeholder="Search..." />
+        </div>
+        <a href="index.html" class="search-btn"><svg class="search-btn-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><span class="search-label">Search</span></a>
+      </div>
+      <label class="current-dir-label">
+        <input type="checkbox" checked /> <span class="dir-label">current directory</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Current Directory Path -->
+  <div class="dir-path">
+    <a href="index.html">Home</a>
+    <span class="path-sep">/</span>
+    <a href="#">android-arch</a>
+    <span class="path-sep">/</span>
+    <span class="path-current">architecture-components</span>
+  </div>
+
+  <!-- Main Content -->
+  <div class="container">
+
+    <!-- File Table -->
+    <div class="file-table-wrapper">
+      <table class="file-table">
+        <thead>
+          <tr>
+            <th class="sortable sorted" onclick="sortTable(this, 0)">
+              名称 <span class="sort-icon">▲</span>
+            </th>
+            <th class="sortable" onclick="sortTable(this, 1)">
+              日期 <span class="sort-icon">▼</span>
+            </th>
+            <th class="sortable" onclick="sortTable(this, 2)">
+              大小 <span class="sort-icon">▼</span>
+            </th>
+            <th class="sortable" onclick="sortTable(this, 3)">
+              行数 <span class="sort-icon">▼</span>
+            </th>
+            <th class="sortable" onclick="sortTable(this, 4)">
+              LOC <span class="sort-icon">▼</span>
+            </th>
+            <th style="width:120px;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="file-tbody">
+          <!-- Rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="dir-footer">
+    由 <a href="#">OpenGrok</a> 托管 &nbsp;·&nbsp; 最后索引更新：2026 年 2 月 15 日 15:06 CST
+  </div>
+
+  <script>
+    // ── File data ──
+    var files = [
+      { name: '.github/', isDir: true, date: '2025-12-10', size: '—', lines: '—', loc: '—', locPercent: 0 },
+      { name: 'app/', isDir: true, date: '2025-12-10', size: '—', lines: '2,156', loc: '1,890', locPercent: 79 },
+      { name: 'gradle/', isDir: true, date: '2025-11-28', size: '—', lines: '45', loc: '32', locPercent: 1 },
+      { name: '.gitignore', isDir: false, date: '2025-08-30', size: '328 B', lines: '24', loc: '18', locPercent: 1 },
+      { name: 'build.gradle', isDir: false, date: '2025-12-10', size: '1.8 KB', lines: '68', loc: '52', locPercent: 2 },
+      { name: 'gradle.properties', isDir: false, date: '2025-11-28', size: '1.2 KB', lines: '15', loc: '12', locPercent: 1 },
+      { name: 'gradlew', isDir: false, date: '2025-08-30', size: '5.3 KB', lines: '186', loc: '147', locPercent: 6 },
+      { name: 'gradlew.bat', isDir: false, date: '2025-08-30', size: '2.3 KB', lines: '92', loc: '71', locPercent: 3 },
+      { name: 'LICENSE', isDir: false, date: '2025-08-30', size: '11.4 KB', lines: '201', loc: '164', locPercent: 7 },
+      { name: 'README.md', isDir: false, date: '2025-12-01', size: '3.7 KB', lines: '89', loc: '72', locPercent: 3 },
+      { name: 'settings.gradle', isDir: false, date: '2025-11-15', size: '412 B', lines: '12', loc: '9', locPercent: 0 },
+    ];
+
+    // ── Render file table ──
+    function renderFiles(data) {
+      var tbody = document.getElementById('file-tbody');
+      var html = '';
+      data.forEach(function(file) {
+        html += '<tr>';
+        // Name column
+        html += '<td data-label="名称">';
+        html += '<div class="file-name">';
+        if (file.isDir) {
+          html += '<svg class="dir-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+        } else {
+          html += '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+        }
+        var link = file.isDir ? 'directory-view.html' : 'code-view.html';
+        html += '<a href="' + link + '">' + file.name + '</a>';
+        html += '</div>';
+        html += '</td>';
+        html += '<td class="file-date" data-label="日期">' + file.date + '</td>';
+        html += '<td class="file-size" data-label="大小">' + file.size + '</td>';
+        html += '<td class="file-lines" data-label="行数">' + file.lines + '</td>';
+        html += '<td class="file-loc" data-label="LOC">' + file.loc + '</td>';
+        html += '<td class="file-actions" data-label="操作">';
+        html += '<a href="directory-history.html" class="action-btn" title="History">';
+        html += '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+        html += '</a>';
+        if (!file.isDir) {
+          html += '<a href="#" class="action-btn" title="Annotate">';
+          html += '<svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+          html += '</a>';
+          html += '<a href="#" class="action-btn" title="Download">';
+          html += '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+          html += '</a>';
+        }
+        html += '</td>';
+        html += '</tr>';
+      });
+      tbody.innerHTML = html;
+    }
+
+    // ── Sort handler ──
+    function sortTable(th, colIndex) {
+      document.querySelectorAll('.file-table th').forEach(function(h) { h.classList.remove('sorted'); });
+      th.classList.add('sorted');
+
+      var ascending = th.querySelector('.sort-icon').textContent === '▲';
+      th.querySelector('.sort-icon').textContent = ascending ? '▼' : '▲';
+
+      var sorted = files.slice().sort(function(a, b) {
+        var aVal = [a.name, a.date, a.size, a.lines, a.loc][colIndex];
+        var bVal = [b.name, b.date, b.size, b.lines, b.loc][colIndex];
+
+        // Directories first
+        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+
+        var aNum = parseFloat(aVal.replace(/,/g, ''));
+        var bNum = parseFloat(bVal.replace(/,/g, ''));
+
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return ascending ? aNum - bNum : bNum - aNum;
+        }
+        return ascending ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      });
+
+      renderFiles(sorted);
+    }
+
+    // ── Initialize ──
+    renderFiles(files);
+  </script>
+
+</body>
+</html>
