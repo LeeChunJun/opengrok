@@ -12,13 +12,6 @@
     </module>
     <module name="FileLength"/>
 
-    <module name="RegexpSingleline">
-        <property name="format" value="\s+$"/>
-        <property name="minimum" value="0"/>
-        <property name="maximum" value="0"/>
-        <property name="message" value="Line has trailing spaces."/>
-    </module>
-
     <module name="LineLength">
         <property name="max" value="150"/>
     </module>
