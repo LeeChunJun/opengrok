@@ -5,7 +5,7 @@
 
 # 步骤二：编译并安装依赖模块
 ```bash
-./mvnw -DskipTests -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -pl opengrok-indexer, plugins, suggester, opengrok-web install
+./mvnw -DskipTests -Dmaven.javadoc.skip=true -Dcheckstyle.skip=true -pl opengrok-indexer,plugins,suggester,opengrok-web install
 ```
 
 # 步骤三：构建 opengrok-web，生成 .min.css / .min.js
