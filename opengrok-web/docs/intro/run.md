@@ -63,12 +63,12 @@ cd opengrok-web
 
 **Bash (Linux/macOS)：**
 ```bash
-../mvnw -DskipTests org.eclipse.jetty.ee10:jetty-ee10-maven-plugin:12.0.10:run
+../mvnw -DskipTests jetty:run
 ```
 
 **PowerShell (Windows)：**
 ```powershell
-..\mvnw.cmd -DskipTests org.eclipse.jetty.ee10:jetty-ee10-maven-plugin:12.0.10:run
+..\mvnw.cmd -DskipTests jetty:run
 ```
 
 启动后访问 `http://localhost:8080/source/` 即可。
