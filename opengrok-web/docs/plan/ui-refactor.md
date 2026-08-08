@@ -1,4 +1,4 @@
-# OpenGrok Web UI 重构计划
+﻿# OpenGrok Web UI 重构计划
 
 ## 一、总体目标
 
@@ -389,23 +389,6 @@ git revert HEAD -- opengrok-web/src/main/webapp/index.jsp
 
 ---
 
-## 六、约束与原则
-
-1. **不破坏现有功能**：搜索提交 URL、表单字段名、Cookie 行为、授权逻辑必须保持兼容。
-2. **CDDL 头部**：所有被改动的 JSP/JSPF/Tag 文件保留 CDDL HEADER + Copyright 注释，仅追加本次重构的 Copyright 行。
-3. **表单兼容性**：新 UI 的表单字段 `name` 必须沿用 `QueryParameters.*` 常量，保证与 `search.jsp` 等后端兼容。
-4. **可回滚性**：每个阶段的改动尽量限定在一个或少数几个文件，便于 `git checkout` 回滚。
-5. **下次 AI 智能体接手**：阅读本文档后，按「四、执行顺序」中下一个未完成阶段继续；先看「五、修改记录」了解已完成项，再开始新一轮修改并追加新条目。
-
-## 七、参考资料
-
-- 新 UI 设计：`opengrok-web/docs/ui/*.html`
-- 模块导览：`opengrok-web/docs/intro/open-grok-web-guide.md`
-- 模块概览：`opengrok-web/docs/intro/overview.md`
-- 构建与运行：`opengrok-web/docs/intro/run.md`
-- 关键 Java 类：`PageConfig.java`、`ProjectHelper.java`、`Scripts.java`、`Util.java`、`Prefix.java`、`QueryParameters.java`
-
----
 
 ### 修复 #1j — 「任意类型」下拉 DOM 存在但页面不显示（被遗留的 SOL 插件/CSS hack 隐藏）
 
@@ -588,3 +571,663 @@ git revert HEAD -- opengrok-web/src/main/webapp/index.jsp
   | 无 hash 数据的项目 | 仅 branch / 「暂无分支」占位 |
 
 ---
+
+### 修复 #1n — 5 个 search 输入框的 autocomplete 推荐下拉永远为空（漏覆盖 `getSelectedProjectNames`）
+
+- **触发时间**：用户验收 #1m 后反馈"搜索框、包括下面高级搜索的四个搜索框在选中项目时候没有推荐内容"
+- **截图参照**：用户给出的 menu.jspf 截图显示输入 Definition 框时弹出 count / callback / current / columns / c / console / conin / conout / conoutEventResult / coninMode 等带"mosaic"项目名的推荐；这是 OpenGrok suggest 模块通过 `/api/v1/suggest` 返回
+- **根因**：
+
+| # | 位置 | 说明 |
+| --- | --- | --- |
+| 1 | `js/utils-0.0.48.js:2184` 的 `getSelectedProjectNames()` | 原版是 `try { return $.map($("#project").searchableOptionList().getSelection()..., ...); } catch (e) { return []; }` —— **依赖 legacy searchable-option-list widget**，我们的 chip UI 根本没有这个 widget，catch 分支返回 `[]` |
+| 2 | `js/utils-0.0.48.js:1743-1747` | 已经对 5 个 input（`#full`/`#defs`/`#refs`/`#path`/`#hist`）分别调 `initAutocompleteForField(inputId, field, config)`，每个调用把各自的 `field` 参数（`"full"`/`"defs"`/`"refs"`/`"path"`/`"hist"`）通过闭包传给 `getAutocompleteMenuData(input, field)`，最终成为 `/api/v1/suggest?field=defs&...` 等请求 —— **这部分正确，无需手动处理** |
+| 3 | `opengrok-web/src/main/java/.../SuggesterServiceImpl.java:138-147` 的 `getNamedIndexReaders` | 当 `env.isProjectsEnabled()` 时用 `projects.stream().map(...)` 流式读取索引 reader，传入空 `projects` 返回空 list → `suggester.search(emptyReaders, ...)` 返回 `Suggestions(Collections.emptyList(), true)` |
+| 4 | 综合效果 | 5 个 input 每次按键都发出 `projects=[]` 的请求 → 后端返回 `suggestions: []` → jQuery UI autocomplete 下拉永远空 |
+
+- **修复 #1h / #1i 漏覆盖了什么**：注释里只提到 `window.domReadyMenu`，实际并没有真的覆盖 `getSelectedProjectNames`，我在 index.jsp 里 grep `getSelectedProjectNames` / `window.getSelectedProjectNames` 都是 0 次出现
+- **修复方案**：
+
+  在 index.jsp 底部 `<script>` IIFE 末尾的 `document.domReady.push(function () { window.domReadyMenu(); })` 中，先覆盖 `window.getSelectedProjectNames` 再调 `window.domReadyMenu()`：
+
+  ```javascript
+  window.getSelectedProjectNames = function () {
+      var ps = document.getElementById('project-select');
+      if (!ps) return [];
+      var names = [];
+      for (var i = 0; i < ps.options.length; i++) {
+          if (ps.options[i].selected) names.push(ps.options[i].value);
+      }
+      return names;
+  };
+  ```
+
+  为什么覆盖是有效的（Node 全局脚本测试验证过）：
+  - utils.js 是 classic script（非 module），里面的 `function getSelectedProjectNames() {...}` 等价于 `window.getSelectedProjectNames = function xxx() {...}`
+  - 我们覆盖 `window.getSelectedProjectNames = newFn` 修改的是 global binding 的当前值
+  - utils.js 1898 行的 `getAutocompleteMenuData(input, field)` 函数体调 `getSelectedProjectNames()` 时按词法作用域查找，运行时取 binding 当前值 —— 拿到我们覆盖的 newFn
+  - 验证脚本：`Locked ref BEFORE: {"projects":["OLD"]}` → 覆盖 → `Locked ref AFTER: {"projects":["A2UI","mosaic"]}`
+  - 注意：utils.js 1794 行 `dataFunction = getAutocompleteMenuData`（仅当参数未传时）把 `getAutocompleteMenuData` 引用闭包到局部 `dataFunction`，autocomplete source callback 拿的是这个引用 —— 但 `getAutocompleteMenuData` 内部转调 `getSelectedProjectNames()` 是再次进入该函数体按词法查找，**所以覆盖 `getSelectedProjectNames` 即可，不必也无法覆盖 `getAutocompleteMenuData`**
+- **每个 input 的 field 参数**：utils.js 已自动处理，5 个框各自带不同 field 给 `/api/v1/suggest`：
+  - `#full` 输入 → `field=full` → 推荐全文搜索项
+  - `#defs` 输入 → `field=defs` → 推荐 symbol 定义项（截图示例）
+  - `#refs` 输入 → `field=refs` → 推荐 symbol 使用项
+  - `#path` 输入 → `field=path` → 推荐文件路径项
+  - `#hist` 输入 → `field=hist` → 推荐 commit message 项
+- **影响范围**：仅 `opengrok-web/src/main/webapp/index.jsp`（底部的 `document.domReady.push` 段，~10 行新增）
+- **未改动**：其他文件 / 其他变量 / 其他逻辑 / menu.jspf / utils.js / 任何后端 Java 类
+- **回滚**：
+
+  ```bash
+  git checkout -- opengrok-web/src/main/webapp/index.jsp
+  ```
+
+  即可回到 #1m 状态
+
+- **用户操作（让改动生效）**：同 #1k，必须重启 Jetty，`mvn jetty:run` 不会自动 watch JSPC 预编译产物：
+
+  ```powershell
+  Stop-Process -Id 28648 -Force
+  cd D:\AppsData\deploy\opengrok\opengrok-web
+  .\..\mvnw.cmd jetty:run
+  # 浏览器硬刷新 Ctrl+Shift+R
+  ```
+
+- **验收点（在浏览器中验证）**：
+
+  | # | 验收点 | 期望 |
+  | --- | --- | --- |
+  | 1 | 主搜索框输入 `c` | 弹出 jQuery UI autocomplete 下拉（来自 `/api/v1/suggest?field=full&projects=A2UI&...`），条目右侧带项目名（如 "mosaic"） |
+  | 2 | 高级搜索的 4 个框（#defs / #refs / #path / #hist）依次输入 | 各自弹出推荐下拉，**内容不同**：#defs 出符号定义、#refs 出符号使用、#path 出路径前缀、#hist 出 commit message |
+  | 3 | DevTools Network | 应当看到 `/api/v1/suggest?field=defs&...` 一类请求，**Query String 含正确的 `projects=mosaic`**（不是空） |
+  | 4 | 修改 chips（点 chip 取消选中某项目） | 重新打开下拉，新的请求 `projects=` 不再包含该未选中项目 |
+  | 5 | Console | 无新错误（之前 catch 的 `searchableOptionList() on null` 不再触发，因为我们接管了 `getSelectedProjectNames`） |
+
+- **troubleshooting**（如果下拉仍空）：
+  1. 浏览器 Network 看 `/api/v1/suggest` 的 Query String —— 若 `projects=` 后面是空值，说明改未生效：浏览器硬刷一次；或 `mvn clean` 后重启 Jetty
+  2. 若 `projects=` 后有项目名但仍空 —— **这是 suggester 索引本身没建**，需要触发重建：
+     ```powershell
+     # 全量重建
+     curl -X PUT http://localhost:8081/api/v1/suggest/rebuild
+     # 或单项目
+     curl -X PUT http://localhost:8081/api/v1/suggest/rebuild/mosaic
+     # 或等 cron（utils.js 返回的 config 显示 `rebuildCronConfig: 0 0 * * *` 即每天零点）
+     ```
+     重建完成后 `/api/v1/suggest` 才会返回非空 suggestions
+---
+
+
+
+### 修复 #1o — 首页 5 个 search 输入框 autocomplete 还是空的真正根因（缺 `jquery-caret` 脚本）
+
+- **触发时间**：用户验收 #1n 后反馈"对比起来还是没有推荐输入"，并给出 8080 工作版 URL：
+  `http://localhost:8080/source/api/v1/suggest?projects%5B%5D=mosaic&field=full&full=mo&defs=&refs=&path=&hist=&type=&caret=2`
+- **关键发现**：用户 URL 用的是 `projects%5B%5D=mosaic`（URL encoded `projects[]=mosaic`）。SuggesterQueryData.java:39 用 `@QueryParam(AuthorizationFilter.PROJECTS_PARAM)`，而 `AuthorizationFilter.java:42` 定义 `PROJECTS_PARAM = "projects[]"`（带方括号）。这是 JAX-RS 强制约定：**前端必须发 `?projects[]=A&projects[]=B` 而不是 `?projects=A&projects=B`**
+- **修正我自己测试错的**：上一轮我把 curl 命令写成 `projects=mosaic`，后端 `data.getProjects()` 返回空 list → SuggesterServiceImpl.getNamedIndexReaders 流空 → 返回 `Suggestions(Collections.emptyList(), true)` → suggestions 列表空。**用正确的 `projects[]=mosaic` 测试，两台服务器都正常返回真实建议**（suggester 索引数据没问题）
+
+| 命令 | 结果 |
+| --- | --- |
+| `curl /api/v1/suggest?projects%5B%5D=mosaic&field=full&full=mo&...&caret=2` | `{"suggestions":[{"phrase":"mosaic","score":432},...]}` ✓ |
+
+- **进一步真正的根因**：实测 8081 加载的 scripts（看 `[getPageConfig].getScripts()` 输出）
+
+  ```
+  8081 (新首页)                    8080 (旧 menu.jspf)
+  ───────────────────────          ──────────────────────────────────
+  jquery.min.js                    jquery.min.js
+  jquery-ui-1.12.1-custom.min.js  jquery-ui-1.12.1-custom.min.js
+  utils-0.0.48.min.js              tablesorter.min.js + parsers
+                                   searchable-option-list-2.0.16.min.js
+                                   utils-0.0.47.min.js
+                                   repos-0.0.3.min.js
+                                   ★ jquery.caret-1.5.2.min.js     ← 缺这个！
+  ```
+
+  utils.js 1899 行 `getAutocompleteMenuData(input, field)` 调 `const caretPos = input.caret();` —— 没 `jquery-caret` plugin → 抛 `TypeError: input.caret is not a function` → `result.suggestions = []` → autocomplete 永远空。
+
+- **`getSelectedProjectNames` 覆盖 (#1n) 在不再有空 projects 的前提下也不够**，因为连请求都没法构造成功（caret 错误早抛，projects 都没机会被读）
+- **修复方案**：在 `opengrok-web/src/main/webapp/index.jsp` 的 setup 段，在原来的 `cfg.addScript("jquery") / ("jquery-ui") / ("utils")` 中间加 `cfg.addScript("jquery-caret")`。Scripts.java:132-140 的 priority 让输出顺序是 jquery(10) → jquery-ui(11) → utils(15) → jquery-caret(25)，刚好 utils 先加载、jquery-caret 后加载
+
+  修改前后代码对比：
+
+  ```java
+  /* 修复前 (#1c 之后) */
+  cfg.addScript("jquery");
+  cfg.addScript("jquery-ui");
+  cfg.addScript("utils");
+
+  /* 修复后 */
+  cfg.addScript("jquery");
+  cfg.addScript("jquery-ui");
+  cfg.addScript("jquery-caret");
+  cfg.addScript("utils");
+  ```
+
+  注：`addScript` 调用顺序不影响最终 HTML 输出顺序，因为 `Scripts` 内部用 TreeSet 按 `priority` 排，输出时 utils(15) 排在 jquery-caret(25) 之前
+
+- **每个 input 的 field 参数**（重申 #1n 已经定下的事实）：utils.js:1743-1747 对 5 个 input 自动以不同 field 参数调用 `initAutocompleteForField("full", "full", config)` / `initAutocompleteForField("defs", "defs", config)` / ... / `initAutocompleteForField("hist", "hist", config)`，每个 input 的 `field` 字符串通过闭包传递给 `getAutocompleteMenuData(input, field)`，最终作为 `/api/v1/suggest` 的 `field` 查询参数。**#1o 不需要再加任何 per-input 处理**
+- **影响范围**：`opengrok-web/src/main/webapp/index.jsp` 一行新增（`cfg.addScript("jquery-caret")`）+ 注释更新
+- **未改动**：menu.jspf / utils.js / 任何后端 Java 类 / `httpheader.jspf`
+- **回滚**：
+
+  ```bash
+  git checkout -- opengrok-web/src/main/webapp/index.jsp
+  ```
+
+  即可回到 #1n 状态
+
+- **用户操作（让改动生效）**：同 #1k，必须重启 Jetty 让 JSP 重编译：
+
+  ```powershell
+  Stop-Process -Id 28648 -Force
+  cd D:\AppsData\deploy\opengrok\opengrok-web
+  .\..\mvnw.cmd jetty:run
+  # 浏览器硬刷新 Ctrl+Shift+R
+  ```
+
+- **验收点**：
+
+  | # | 验收点 | 期望 |
+  | --- | --- | --- |
+  | 1 | 主搜索框输入 `mo` | 弹出 jQuery UI autocomplete 下拉：mosaic / modifier / more / mode / module / ...（与 8080 菜单页弹的同样 10 条一致） |
+  | 2 | DevTools Network | 出现 `/api/v1/suggest?projects%5B%5D=A2UI&projects%5B%5D=...&field=full&...&caret=2` 请求，**注意是 `projects[]=` 不是 `projects=`**；返回 JSON 含 `suggestions: [...]` |
+  | 3 | 高级搜索 4 框：依次输入 `mo` 到 #defs / #refs / #path / #hist | 各自弹字段相关的下拉（defs 出 symbol 定义、refs 出 symbol 用法、path 出文件路径、hist 出 commit message term），符合 utils.js 1743-1747 的字段映射 |
+  | 4 | 项目 chip 取消选中（如点 mosaic 的 chip） | 重新键入时 Network 请求的 `projects[]=` 列表减一项 |
+  | 5 | Chrome DevTools Console | **不再有 "input.caret is not a function"** 错误（之前隐藏在 try-catch / async ajax 回调里看不到） |
+
+- **troubleshooting**（如果改完还空）：
+  1. 浏览器硬刷一次再试（Ctrl+Shift+R 清缓存）
+  2. DevTools Network → 找到 `/api/v1/suggest` 请求，复制完整 URL 到地址栏单独 curl —— 应直接返回 JSON 含 suggestions
+  3. 如果单 curl 有数据但浏览器仍空，看 DevTools Sources / Network 验证 `jquery.caret-1.5.2.min.js` 是否真的被加载（Network 过滤 `.js` 应该有 `caret` 字样）—— 如果没加载，可能 JSPC 缓存问题，需要 `mvn clean` 后再 `mvn jetty:run`
+  4. 如果 `projects[]=` 是空的（URL 里只有 `projects%5B%5D=&caret=...`），说明 `getSelectedProjectNames` 覆盖没生效——重新验收 #1n
+
+
+
+### 修复 #1p — 5 个搜索框的 autocomplete 下拉溢出（修正 + 等宽）且灰色项目名 baseline 不对齐
+
+- **触发时间**：用户验收 #1o 后反馈"功能已经正常实现，但是样式有一点奇怪，因为首先下拉框右侧超过太多，理论上要和输入框保持一致宽度，另外右侧的灰色项目名字例如：mosaic 也没有对齐"
+- **澄清**：**正式环境**是 Tomcat 8080（旧的 `menu.jspf` 在跑，已通过 `[#1n]` 的 URL 形态校验过；suggester 索引数据齐全）；**开发/测试环境**是 Jetty 8081（`mvn jetty:run`，挂的是 `target/source.war`，跑重构后的 `index.jsp`）。修复目标始终在 8081 的 `index.jsp`
+- **根因**：
+
+| # | 现象 | 真因 |
+| --- | --- | --- |
+| 1 | 下拉框右侧超出输入框宽度（实测下拉 ≈ 900px，输入框 ≈ 720px） | utils-0.0.48.js 第 1969-2005 行 `getSuggestionListItem` 用 jQuery 生成 `<li><div class="ui-menu-item-wrapper" style="height:20px;padding:0"><span style="float:left;padding-left:5px">phrase</span><span style="float:right;padding-right:5px;color:#999;font-style:italic">project</span></div></li>`：phrase（左 span）没有 `max-width` 和 ellipsis，长 phrase（如 `com.jakewharton.mosaic.tty.terminal` ≈ 36 字符）会让 li 撑到 ≈400px；再叠加 jQuery UI 默认在 `open()` 时把 ul.width 设为 `Math.max(outerWidth, outerWidth(true))`，整个 popup 跑到 800-900px |
+| 2 | 灰色项目名 `mosaic` 在 item 右下独立一行（baseline 没对齐） | utils.js 用 `float: right` 实现"项目名在右侧"，但当 wrapper 高度 `20px` 比项目名 `mosaic` 的行高小、且 wrapper 设了 `padding:0`、li `display:block` 不限高时，float 元素的位置计算不稳定 |
+
+- **不影响的功能**：下拉数据本身（#1n + #1o 修复已完成）、5 个字段分别调用（utils.js 1743-1747 已闭环）、chips 同步项目（refreshProjectSelect）
+
+- **修复方案**：
+
+  1. **CSS 部分**（去掉 `#1p` 上一版错的 `max-width: 560px`）：完全不动 utils.js。在 `opengrok-web/src/main/webapp/index.jsp` 内联 `<style>` 块末尾追加：
+
+     ```css
+     .ui-autocomplete {
+         box-sizing: border-box;
+         border-radius: 8px;
+         overflow: hidden;
+         box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+         font-size: 13.5px;
+     }
+     .ui-autocomplete .ui-menu-item { margin: 0; border: 0; display: block; }
+     .ui-autocomplete .ui-menu-item-wrapper {
+         height: 32px !important;
+         padding: 0 12px !important;
+         display: flex !important;
+         align-items: baseline !important;
+         gap: 12px;
+         min-width: 0;
+     }
+     .ui-autocomplete .ui-menu-item-wrapper > span {
+         float: none !important;
+         max-height: none !important;
+         padding: 0 !important;
+         line-height: 1.5;
+         color: var(--fg);
+         font-style: normal;
+     }
+     .ui-autocomplete .ui-menu-item-wrapper > span:first-child {
+         flex: 1 1 auto;
+         min-width: 0;
+         overflow: hidden;
+         text-overflow: ellipsis;
+         white-space: nowrap;
+     }
+     .ui-autocomplete .ui-menu-item-wrapper > span:last-child {
+         flex: 0 0 auto;
+         color: var(--muted);
+         font-style: italic;
+         font-size: 12.5px;
+     }
+     .ui-autocomplete .ui-menu-item.ui-state-focus .ui-menu-item-wrapper,
+     .ui-autocomplete .ui-menu-item:hover .ui-menu-item-wrapper {
+         background: var(--accent-dim);
+     }
+     ```
+
+  2. **JS 部分**（控制 popup 宽度 = 对应 input 宽度，不要 hardcoded max）：在底部 IIFE 的 `window.domReadyMenu()` 调用之后追加 4 行：
+
+     ```javascript
+     // 每次 open 都把 popup 宽度钉到 input 宽度
+     $('#full, #defs, #refs, #path, #hist').on('autocompleteopen', function () {
+         var $ul = $(this).autocomplete('widget');
+         $ul.outerWidth($(this).outerWidth());
+     });
+     ```
+
+     每个 input 单独绑，所以 #defs/#refs/#path/#hist popup 自动跟随各自的 input 宽度变窄（默认均与所在 flex item 等宽）
+
+  关键点：
+  - `autocompleteopen` 是 jQuery UI autocomplete widget 在 `menu` open 时触发的事件，每次 open 都跑一次（用户键入字符到一定长度触发 show）
+  - `$(this).autocomplete('widget')` 返回 jQuery UI 维护的 `<ul>`，我们可以直接 `outerWidth()` 设它
+  - 这就实现了 *popup 宽度 = 当前 input 宽度*，不会因为长 phrase 撑超
+  - 5 个 input 各自绑，所以底下 #defs/#refs/#path/#hist 的 popup 自动跟自己的 input 同宽
+
+- **影响范围**：仅 `opengrok-web/src/main/webapp/index.jsp`
+  - 内联 `<style>` 块追加 1 段 `.ui-autocomplete` override CSS（约 50 行）
+  - 底部 IIFE 的 `window.domReadyMenu()` 后追加 4 行 autocompleteopen hook
+- **未改动**：utils.js / menu.jspf / Tomcat 上的 war / 任何后端 / 任何 Java 类 / 其他样式文件
+- **回滚**：
+
+  ```bash
+  git checkout -- opengrok-web/src/main/webapp/index.jsp
+  ```
+
+  即可回到 #1o 状态（功能正常但样式未优化）
+
+- **用户操作（让改动生效）**：同 #1k，必须重启 Jetty 让 JSP 重编译 + 浏览器硬刷：
+
+  ```powershell
+  Stop-Process -Id 28648 -Force
+  cd D:\AppsData\deploy\opengrok\opengrok-web
+  .\..\mvnw.cmd jetty:run
+  # 浏览器硬刷新 Ctrl+Shift+R
+  ```
+
+- **验收点**：
+
+  | # | 场景 | 期望 |
+  | --- | --- | --- |
+  | 1 | 主搜索框（`#full`）输入 `mo` 弹下拉 | 下拉宽度 = `#full` 输入框宽度（容器内嵌满到接近 720px，跟 input 等宽，不会溢出） |
+  | 2 | 点"高级搜索"展开 4 个输入框，分别输入 `mo` | 5 个框各自弹出的下拉都跟**自己**的 input 等宽；`#defs`/`#refs`/`#path`/`#hist` 的 input 比 `#full` 窄，所以它们的 popup 也跟着变窄 |
+  | 3 | 长 phrase 出现在 #defs 下拉里（如 `com.jakewharton.mosaic.modifier.Modifier`） | 超长部分用 `…` 截断（不撑超 ul） |
+  | 4 | 项目名 `mosaic` 灰色斜体 | 与 phrase 文字 baseline 对齐（同一水平线），不是独立一行 |
+  | 5 | 切换 chips 后再输入 | 下拉依旧跟 input 等宽，项目名仍 baseline 对齐，行为稳定 |
+  | 6 | 键盘上下键移动高亮 | 高亮项背景色 `var(--accent-dim)`（浅蓝半透明），与项目 chip 高亮风格一致 |
+
+- **troubleshooting**（如果改完样式没生效）：
+  1. 浏览器硬刷一次 Ctrl+Shift+R
+  2. DevTools Elements → 找 `<ul class="ui-autocomplete ui-widget">` → 看 Computed `width` 是否等于对应 input.outerWidth
+  3. DevTools Console → 输入 `$('#full').autocomplete('widget').outerWidth()` 看数值；输入 `$('#full').outerWidth()` 比较 —— 应该**相等或 ±1px**（box-sizing 引入的容差）
+  4. 如果两个值不等：可能是 `mvn jetty:run` JSPC 没重编，需要 `mvn clean` 后 `mvn jetty:run`
+  5. 如果报错 `$ is not defined` —— jQuery 没加载；回到 #1c / #1o 检查 `cfg.addScript("jquery")` 块
+
+
+---
+
+## 六、约束与原则
+
+1. **不破坏现有功能**：搜索提交 URL、表单字段名、Cookie 行为、授权逻辑必须保持兼容。
+2. **CDDL 头部**：所有被改动的 JSP/JSPF/Tag 文件保留 CDDL HEADER + Copyright 注释，仅追加本次重构的 Copyright 行。
+3. **表单兼容性**：新 UI 的表单字段 `name` 必须沿用 `QueryParameters.*` 常量，保证与 `search.jsp` 等后端兼容。
+4. **可回滚性**：每个阶段的改动尽量限定在一个或少数几个文件，便于 `git checkout` 回滚。
+5. **下次 AI 智能体接手**：阅读本文档后，按「四、执行顺序」中下一个未完成阶段继续；先看「五、修改记录」了解已完成项，再开始新一轮修改并追加新条目。
+
+
+## 七、参考资料
+
+- 新 UI 设计：`opengrok-web/docs/ui/*.html`
+- 模块导览：`opengrok-web/docs/intro/open-grok-web-guide.md`
+- 模块概览：`opengrok-web/docs/intro/overview.md`
+- 构建与运行：`opengrok-web/docs/intro/run.md`
+- 关键 Java 类：`PageConfig.java`、`ProjectHelper.java`、`Scripts.java`、`Util.java`、`Prefix.java`、`QueryParameters.java`
+
+---
+
+
+### 修复 #1q — 搜索结果列表：每文件最多 10 行 + 长行省略号 + History/Annotate 灰色
+
+- **触发时间**：用户最终验收后，给出 8081 实测截图，反馈"最后看一下底下的搜索结果列表，每一个item内子条数我要求最多10条，超过后支持展开收起操作。另外，每一个item子项的宽度过长时，例如：超过整个子项90%时，后面我希望有省略号。第二个截图是真实截图，上面红色是我想要改动的点。第一张是UI设计稿"，并对 `History / Annotate / ↓` 三个按钮标注"颜色改成灰色"
+- **3 项独立要求**：
+
+| # | 需求 | 在 index.jsp 的位置 |
+| --- | --- | --- |
+| 1 | 每个 file card 内最多 10 条命中行，超出显示"显示剩余 N 条匹配行 / 收起" | renderResults 函数（约 line 1482） |
+| 2 | 单条命中行宽度过长 → 末尾 `…`（CSS 单行省略号） | `<style>` 块 `.line-code`（约 line 992） |
+| 3 | History / Annotate / 下载按钮用更明显的灰色 | `<style>` 块 `.action-btn`（约 line 937） |
+
+- **修复方案**：
+
+  **改动 1（10 条折叠）**：
+  ```javascript
+  var MAX_HITS_PER_CARD = 10;
+  hits.forEach(function (h, i) {
+      var lineClass = (i >= MAX_HITS_PER_CARD) ? 'result-line result-line-overflow' : 'result-line';
+      // ... render <a class="lineClass"> ...
+  });
+  if (hits.length > MAX_HITS_PER_CARD) {
+      var hiddenCount = hits.length - MAX_HITS_PER_CARD;
+      // render <button class="result-expand-btn">显示剩余 N 条匹配行</button>
+  }
+  ```
+  + 一次性 event delegation（用 `_expandBound` 守卫避免重复绑）：
+  ```javascript
+  resultsList.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('.result-expand-btn');
+      if (!btn) return;
+      var card = btn.closest('.result-file-card');
+      var expanded = card.classList.toggle('expanded');
+      // 切换按钮文字：「显示剩余 N 条」 ↔「收起」
+  });
+  ```
+
+  **改动 2（CSS 单行省略号）**：
+  ```css
+  .line-code {
+      flex: 1;
+      min-width: 0;            /* 让 ellipsis 在 flex item 内生效 */
+      padding-right: 14px;
+      white-space: nowrap;     /* 从 pre → nowrap：不换行 */
+      overflow: hidden;
+      text-overflow: ellipsis;
+  }
+  .line-code .match {
+      background: #fef08a;
+      border-bottom: 2px solid #fde047;
+      padding: 0 1px;
+      border-radius: 2px;
+      flex-shrink: 0;          /* 关键字不被 ellipsis 切掉 */
+  }
+  ```
+  注意：之前 `.line-code { white-space: pre; overflow-x: auto }` 是允许横向滚动的旧行为，现在改成 nowrap + ellipsis 后，超长行不再横向滚动而直接截断——这正是用户要求"过长时增加省略号"。
+
+  **改动 3（折叠样式）**：
+  ```css
+  .result-file-card .result-line.result-line-overflow { display: none; }
+  .result-file-card.expanded .result-line.result-line-overflow { display: flex; }
+  .result-expand-btn {
+      width: 100%;
+      padding: 7px 14px;
+      background: transparent;
+      border: 0;
+      border-top: 1px dashed var(--border);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+  }
+  .result-expand-btn:hover { background: var(--accent-dim); }
+  .result-expand-btn .arrow { display: inline-block; transition: transform 0.2s; }
+  .result-file-card.expanded .result-expand-btn .arrow { transform: rotate(180deg); }
+  ```
+
+  **改动 4（按钮灰色）**：
+  ```css
+  .action-btn {
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      color: #9ca3af;            /* 比 var(--muted) 更明显的灰 */
+      ...
+  }
+  .action-btn:hover {
+      background: #f3f4f6;
+      color: var(--fg);
+      border-color: #d1d5db;
+  }
+  ```
+
+- **影响范围**：仅 `opengrok-web/src/main/webapp/index.jsp`
+  - `<style>` 块 3 处局部修改（约 +25 行 CSS）
+  - `renderResults` 函数体改写（约 +20 行 JS：加 MAX_HITS_PER_CARD + 折叠 class + 折叠按钮 + 一次性的 click delegation）
+  - **未改动**：utils.js / menu.jspf / 后端 / 其他样式
+
+- **回滚**：
+  ```bash
+  git checkout -- opengrok-web/src/main/webapp/index.jsp
+  ```
+  即可回到 #1p 状态
+
+- **用户操作（让改动生效）**：同之前，必须重启 Jetty 让 JSP 重编译：
+  ```powershell
+  Stop-Process -Id 28648 -Force
+  cd D:\AppsData\deploy\opengrok\opengrok-web
+  ..\mvnw.cmd -DskipTests jetty:run
+  # 浏览器硬刷新 Ctrl+Shift+R
+  ```
+
+- **验收点**：
+
+  | # | 场景 | 期望 |
+  | --- | --- | --- |
+  | 1 | 搜索 `mosaic` 命中 `mosaic/mosaic-runtime/build.yaml` 这种有 19+ 行的文件 | 该 card 默认只显示前 10 行；下方出现虚线分隔 + "▼ 显示剩余 N 条匹配行" 按钮 |
+  | 2 | 点"显示剩余 N 条"按钮 | 剩余所有行展开显示；按钮变成 "▲ 收起"，箭头旋转 180° |
+  | 3 | 再点"收起" | 行收回只显示前 10 条；按钮文字恢复 |
+  | 4 | 命中行非常长（如 `public suspend fun runMosaic(content: @Composable () → Unit)`、或 build.yaml 25 行那种 `run: ./gradlew :<b>mosaic</b>-tty:...`） | 单行末尾显示 `…`，中间的高亮关键词 `<mark class="match">` 仍完整不被截 |
+  | 5 | History / Annotate / ↓ 按钮 | 默认状态明显灰色（color: #9ca3af），hover 时文字色变深（var(--fg)）；与第一张设计稿"颜色改成灰色"一致 |
+  | 6 | Card 下方分页 `1 2 3 ... 100` 不变 | 不受影响 |
+
+- **troubleshooting**：
+  1. 如果行展开后按钮文字没变：DevTools Console 看是否有 JS 报错；或浏览器硬刷再试
+  2. 如果省略号不显示：检查 Computed `text-overflow: ellipsis`，确认 `.line-code` 父元素是 flex 容器（`.result-line` 是 `display: flex`）
+  3. 如果按钮 hover 时颜色没变成 fg：检查 `.action-btn:hover` 规则是否被更后面的 CSS 覆盖
+
+### 修复 #1r — file card 加目录路径行 + action-btn 颜色改成柔和灰（保留 border + bg）
+
+- **触发时间**：用户验收 #1q 后反馈第二轮两点：
+  - "这里要加一个文件所在目录，方便我点击进去目录录看页面进行交互" —— 在每个 file card 上方插入一行可点击的目录路径
+  - "按钮没有像左侧一样的灰色" —— History/Annotate/↓ 按钮颜色要跟 sort-bar 风格一致
+- **第二轮反馈（在 #1r 实施过程中）**：**"border + bg 还是需要的"** —— #1r 第一版改过头，把 `.action-btn` 的 border + bg 全去掉变成透明按钮了，回退保留 border + bg，但颜色用 `--muted` 这种柔和灰，与左侧 sort-bar 默认色一致
+
+- **修复方案**：
+
+  **改动 1（file-card 顶部加目录行）**：
+  - 在 `renderResults` 渲染 `result-file-card` 时，先算 `dir = path.substring(0, path.lastIndexOf("/"))`，如果非空就在 `<div class="result-file-card">` 后立刻插入：
+    ```javascript
+    if (dir) {
+        html += '<div class="result-file-dir">';
+        html += '<svg>...folder icon...</svg>';
+        html += '<a href="<%= ctxPath %><%= Prefix.XREF_P %>/' + encodeURIComponent(dir) + '">'
+              + escapeHtml(dir) + '</a>';
+        html += '</div>';
+    }
+    ```
+  - CSS（新增 ~20 行）：
+    ```css
+    .result-file-dir {
+        padding: 8px 14px 0;
+        font-size: 11.5px;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .result-file-dir a {
+        color: var(--muted);
+        text-decoration: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1 1 auto;
+        transition: color 0.12s;
+    }
+    .result-file-dir a:hover {
+        color: var(--accent);
+        text-decoration: underline;
+    }
+    ```
+
+  **改动 2（action-btn 颜色改成柔和的 `--muted`，保留 border + bg）**：
+  ```css
+  .action-btn {
+      padding: 4px 10px;             /* hit-area 略放大 */
+      border-radius: 5px;
+      font-size: 12px;
+      border: 1px solid #e5e7eb;     /* 保留 */
+      background: #f9fafb;           /* 保留 */
+      color: var(--muted);            /* --muted 比 #9ca3af 更柔和 */
+      ...
+  }
+  .action-btn:hover {
+      background: #f3f4f6;
+      color: var(--fg);
+      border-color: #d1d5db;
+  }
+  ```
+
+- **#1q 当时写的错**："color: #9ca3af; border: 1px solid #e5e7eb; background: #f9fafb" —— 这个颜色对比确实比 sort-bar 太深；现在统一用 `--muted` (`#6b7280`) 作为默认色 + `#f3f4f6` hover
+
+- **影响范围**：仅 `opengrok-web/src/main/webapp/index.jsp`
+  - `<style>` 块：`.action-btn` 颜色调整 + 新增 `.result-file-dir` 样式
+  - `renderResults` 函数体：插入 `.result-file-dir` HTML 渲染逻辑
+
+- **回滚**：
+  ```bash
+  git checkout -- opengrok-web/src/main/webapp/index.jsp
+  ```
+
+- **验收点**：
+
+  | # | 场景 | 期望 |
+  | --- | --- | --- |
+  | 1 | 搜索有 2+ 个不同目录命中的关键词（如 `mosaic`） | 每个 file card 上方出现一行灰色小字路径，folder icon + 完整目录路径（不含文件名）；hover 时文字变蓝 |
+  | 2 | 点击目录路径链接 | 跳转到 `/xref/<dir>` 目录浏览页（参照 list.jsp 的 directory listing） |
+  | 3 | 跨多项目时，目录路径前面可能相同 | 仍只显示目录部分（不含 `项目前缀`），保持简洁 |
+  | 4 | History/Annotate/↓ 按钮 | 灰色柔和（`var(--muted)` = `#6b7280`），仍保留 1px 边框 + `#f9fafb` 背景；hover 时背景稍深（`#f3f4f6`）+ 文字变深（`--fg`），风格与左侧 `.sort-option` 同调 |
+
+### 修复 #1t — 搜索结果列表：按目录分组的 group header（替代 #1r 的逐卡目录行）
+
+- **触发时间**：用户给截图"如截图所展示样式" —— 实际期望是**按目录聚合**的 group header（不是 #1r 的每卡贴一行目录）
+- **#1r 设计走偏了**：当时实现的"每张 file card 各自上方贴一行 dir 行"，同一目录里多张卡会出现重复目录行，不符合用户截图的"相同目录只显示一次 group header"
+- **本次（#1t）正确实现**：按 `path.substring(0, lastIndexOf("/"))` 聚合文件到 `groups[dir]`，渲染顺序变为：
+  ```
+  <div class="result-group-header">      ← 蓝色目录路径链接 + 命中数徽章
+    <svg folder/>
+    <a href="/xref/{dir}">{dir}</a>
+    <span class="group-count">{hits}</span>
+  </div>
+  <div class="result-file-card">...</div>  ← 该目录下的 file card
+  <div class="result-file-card">...</div>
+  ```
+
+- **renderResults 改动**：
+  ```javascript
+  // Old (#1r): 一个 if (dir) 块嵌入每个 file card
+  // New (#1t): 先按 dir 聚合
+  var groups = Object.create(null);
+  filePaths.forEach(function (path) {
+      var dir = path.substring(0, path.lastIndexOf('/')) || '';
+      if (!groups[dir]) groups[dir] = [];
+      groups[dir].push({ path: path, hits: resultsMap[path] || [] });
+  });
+  Object.keys(groups).forEach(function (dir) {
+      // totalHits 累加
+      // 先画 group header（含徽章），再画本组下所有 file card
+  });
+  ```
+
+- **CSS 新增**（`result-group-header` 系列，约 35 行）：
+  ```css
+  .result-group-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 4px 10px;
+      font-size: 14px; font-weight: 600;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      letter-spacing: -0.01em;
+  }
+  .result-group-header a, .result-group-header .group-root {
+      color: var(--accent);
+      text-decoration: none;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      flex: 1 1 auto;
+  }
+  .result-group-header a:hover { text-decoration: underline; }
+  .group-count {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 22px; height: 20px; padding: 0 6px;
+      border-radius: 999px; font-size: 11px; font-weight: 600;
+      background: var(--accent-dim); color: var(--accent);
+      flex-shrink: 0;
+  }
+  ```
+  **删除**之前 #1r 加的 `.result-file-dir` 样式（每个 file card 自己的 dir 行已被 group header 取代）
+
+- **影响范围**：仅 `opengrok-web/src/main/webapp/index.jsp`
+  - `renderResults` 函数体重写（聚合逻辑）
+  - `<style>` 块新增 `.result-group-header` 系列 + 删除 `.result-file-dir`
+
+- **回滚**：
+  ```bash
+  git checkout -- opengrok-web/src/main/webapp/index.jsp
+  ```
+
+- **验收点**：
+
+  | # | 场景 | 期望 |
+  | --- | --- | --- |
+  | 1 | 搜索 `mosaic` 命中 `mosaic/README.md` 和 `mosaic/CHANGELOG.md` 同目录 | 出现一个 group header：`mosaic/`（蓝色） + 徽章 `2`；下面 2 张 file card |
+  | 2 | 搜索命中 `mosaic-runtime.klib.api` 单文件 | 单 card 没有 group header（只有 file card）|
+  | 3 | 不同目录的命中（`mosaic/` 和 `mosaic/mosaic-runtime/...`） | 出现 2 个 group header，按搜索结果出现顺序排列，每个 header 独立配色和命中数徽章 |
+  | 4 | 点 group header 的目录路径 | 跳转到 `/xref/{dir}` 目录浏览页（参照 `list.jsp` 的 directory listing） |
+  | 5 | 命中数 `1` 时 | 徽章显示 `1` |
+  | 6 | 项目根文件命中（path 无 `/`） | group header 显示 `(项目根)` 灰色文字，不可点 |
+
+  ---
+
+### 修复 #1u — 排序按钮（最后修改时间/相关度/路径）切换无效果 + 展开按钮 hover 文字看不清
+
+- **触发时间**：用户验收 #1t 后反馈第二轮两点：
+  - "这几个切换按钮好像没有效果" —— 「最后修改时间 / 相关度 / 路径」点击只切换 `.active` class，**没有真的发起新的 sort 请求**
+  - "鼠标放置后文字看不清" —— "显示剩余 N 条匹配行" 整行 hover 后变成浅蓝半透明，按钮文字依然蓝色 → 对比度太低
+- **根因**：
+
+| # | 现象 | 真因 |
+| --- | --- | --- |
+| 1 | 排序按钮无效果 | `changeSort` 是 client-only placeholder：`querySelectorAll('.sort-option')` 切 class 就完事，没发请求；且 `data-sort` 用的别名（`modified`/`relevance`/`path`）跟 OpenGrok `SortOrder` 枚举的 `lastmodtime`/`relevancy`/`fullpath` 也不匹配（[SortOrder.java:32-40](opengrok-indexer/src/main/java/org/opengrok/indexer/web/SortOrder.java)） |
+| 2 | 展开按钮 hover 文字不清 | CSS `.result-expand-btn { color: var(--accent) }` + hover 加 `background: var(--accent-dim)`（淡蓝半透明 `#rgba(59,130,246,0.08)`）→ 蓝字 on 淡蓝背景，对比度太低 |
+
+- **修复方案**：
+
+  **改动 1（排序按钮）** —— 把 `changeSort` 改成真的发请求：
+  ```javascript
+  var SORT_KEY_MAP = { 'modified': 'lastmodtime', 'relevance': 'relevancy', 'path': 'fullpath' };
+  window.changeSort = function (el) {
+      var apiSort = SORT_KEY_MAP[el.getAttribute('data-sort')] || 'relevancy';
+      // toggle active class …
+      // 重新构造 params（同 performInlineSearch），加 params.set('sort', apiSort);
+      // fetch('/api/v1/search?' + params).then(renderResults)
+  };
+  ```
+  关键：alias → API key 映射 + 复用现有的 `performInlineSearch` 拼参数方式
+
+  **改动 2（展开按钮）** —— 把 hover 的配色改深：
+  ```css
+  .result-expand-btn:hover {
+      background: #dbeafe;          /* tailwind blue-100 */
+      color: #1e40af;               /* tailwind blue-800 — text stays legible */
+  }
+  ```
+
+- **影响范围**：仅 `opengrok-web/src/main/webapp/index.jsp`
+  - `changeSort` 函数体重写（约 +20 行 JS：添加 SORT_KEY_MAP + 完整 fetch + render）
+  - `.result-expand-btn:hover` 2 行 CSS（配色增强）
+
+- **回滚**：
+  ```bash
+  git checkout -- opengrok-web/src/main/webapp/index.jsp
+  ```
+
+- **验收点**：
+
+  | # | 场景 | 期望 |
+  | --- | --- | --- |
+  | 1 | 搜索后点"最后修改时间" | URL 改 `/api/v1/search?…&sort=lastmodtime`，结果按文件最后修改时间排序；按钮 active 状态切换 |
+  | 2 | 点"路径" | sort=`fullpath`，结果按文件路径字母排序 |
+  | 3 | 点"相关度" | sort=`relevancy`，结果按 Lucene 相关度（默认） |
+  | 4 | 鼠标悬停"显示剩余 N 条匹配行" | 背景变浅蓝（`#dbeafe`），文字变深蓝（`#1e40af`），清晰可读 |
+  | 5 | DevTools Network 看 `/api/v1/search` 请求的 Query String | 含 `sort=lastmodtime` 或 `relevancy` 或 `fullpath` |
+
+- **troubleshooting**：
+  1. 排序切换无效果但 button active class 切换了：说明 fetch 没发，看 DevTools Network；可能是 `<form id="sbox">` 没找到 → 加 `if (!sbox) return;` 守卫已经在
+  2. 排序结果不按预期：检查 OpenGrok `SortOrder.LASTMODIFIED` 等的 `name` 值是否拼对
+  3. 展开按钮 hover 仍然不清：可能是浏览器缓存，Ctrl+Shift+R 再试

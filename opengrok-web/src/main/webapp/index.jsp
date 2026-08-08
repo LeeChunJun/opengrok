@@ -212,9 +212,16 @@ PageConfig cfg = PageConfig.get(request);
 cfg.checkSourceRootExistence();
 cfg.setTitle("OpenGrok Code Search");
 
-/* Register jQuery + jquery-ui + utils so the existing suggester/autocomplete works */
+/* Register jQuery + jquery-ui + utils + jquery-caret so the existing suggester/autocomplete works.
+   utils.js's getAutocompleteMenuData() (utils-0.0.48.js:1898-1915) calls input.caret() to read the
+   caret position — if jquery.caret-1.5.2.min.js is not loaded this throws "input.caret is not a
+   function" and the suggestion popup silently empties. The original httpheader.jspf registers
+   these in priority order, so we mirror the same set here.
+   The legacy searchable-option-list widget is NOT needed: we override window.getSelectedProjectNames
+   to read from our hidden <select id="project-select"> instead. */
 cfg.addScript("jquery");
 cfg.addScript("jquery-ui");
+cfg.addScript("jquery-caret");
 cfg.addScript("utils");
 
 ProjectHelper ph = ProjectHelper.getInstance(cfg);
@@ -931,28 +938,76 @@ if (displayRepos) {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 500;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--muted);
+      padding: 4px 10px;          /* comfort hit-area, like sort-option */
+      border-radius: 5px;
+      font-size: 12px;
+      border: 1px solid #e5e7eb;   /* keep border + bg (per user feedback) */
+      background: #f9fafb;
+      color: var(--muted);         /* softer gray — same token as sort-bar default */
       cursor: pointer;
       font-family: var(--font-sans);
-      transition: all 0.12s;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
       text-decoration: none;
       white-space: nowrap;
       flex-shrink: 0;
     }
     .action-btn:hover {
-      background: #f0f1f3;
+      background: #f3f4f6;         /* slightly darker gray on hover, like sort-bar */
       color: var(--fg);
-      border-color: #ccc;
+      border-color: #d1d5db;
     }
     .action-btn svg {
       width: 12px; height: 12px;
       stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    /* Result group header — bucket of file cards that share the same directory.
+       One header per distinct dir, with the dir as an accent link + a hit-count badge. */
+    .result-group-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 4px 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      letter-spacing: -0.01em;
+      min-width: 0;
+    }
+    .result-group-header:first-child { padding-top: 4px; }
+    .result-group-header svg {
+      width: 14px; height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      flex-shrink: 0;
+    }
+    .result-group-header a, .result-group-header .group-root {
+      color: var(--accent);
+      text-decoration: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+      flex: 1 1 auto;
+      transition: color 0.12s;
+    }
+    .result-group-header a:hover { text-decoration: underline; }
+    .result-group-header .group-root { color: var(--muted); font-style: italic; }
+    .group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      background: var(--accent-dim);
+      color: var(--accent);
+      flex-shrink: 0;
     }
     .result-lines { padding: 4px 0; }
     .result-line {
@@ -984,16 +1039,49 @@ if (displayRepos) {
     }
     .line-code {
       flex: 1;
+      min-width: 0;             /* let ellipsis kick in inside flex */
       padding-right: 14px;
-      white-space: pre;
-      overflow-x: auto;
+      white-space: nowrap;      /* single line, ellipsis-capable */
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .line-code .match {
       background: #fef08a;
       border-bottom: 2px solid #fde047;
       padding: 0 1px;
       border-radius: 2px;
+      flex-shrink: 0;          /* highlighted keyword never compressed */
     }
+
+    /* Per card: max 10 lines shown by default; extra lines hide behind "show more" button.
+       The button toggles .expanded on the parent .result-file-card. */
+    .result-file-card .result-line.result-line-overflow { display: none; }
+    .result-file-card.expanded .result-line.result-line-overflow { display: flex; }
+    .result-expand-btn {
+      display: block;
+      width: 100%;
+      padding: 8px 14px;
+      margin-top: 2px;
+      background: transparent;
+      border: 0;
+      border-top: 1px dashed var(--border);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.12s, color 0.12s;
+      font-family: var(--font-sans);
+    }
+    .result-expand-btn:hover {
+      background: #dbeafe;          /* tailwind blue-100 — much darker than accent-dim */
+      color: #1e40af;                /* tailwind blue-800 — keeps text legible on the hover bg */
+    }
+    .result-expand-btn .arrow {
+      display: inline-block;
+      transition: transform 0.2s;
+    }
+    .result-file-card.expanded .result-expand-btn .arrow { transform: rotate(180deg); }
 
     .pagination {
       display: flex;
@@ -1071,7 +1159,72 @@ if (displayRepos) {
         display: none;
       }
     }
-</style>
+
+    /* —— jQuery UI autocomplete popup — equal-width to input + baseline alignment ——
+       utils-0.0.48.js:1961-2005 renders each suggestion as:
+         <li class="ui-menu-item" style="display:block">
+           <div class="ui-menu-item-wrapper" style="height:20px;padding:0">
+             <span style="float:left;padding-left:5px">phrase</span>
+             <span style="float:right;padding-right:5px;color:#999;font-style:italic">projectName</span>
+           </div>
+         </li>
+       jQuery UI's `.ui-autocomplete` width is set by `_width = Math.max(ul.width("").outerWidth(), ul.outerWidth(true))`,
+       and with long phrase strings and floating children this pushes the popup past the input width.
+       We hook `autocompleteopen` (set up in the inline IIFE further down) to pin `ul.outerWidth(input.outerWidth())`,
+       so #full/#defs/#refs/#path/#hist each get a popup that matches their own input width.
+       We also override the wrapper to use flex (so floats don't break the ellipsis clip) and align the right-hand
+       project name to the phrase's baseline. */
+    .ui-autocomplete {
+      box-sizing: border-box;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      font-size: 13.5px;
+    }
+    .ui-autocomplete .ui-menu-item {
+      margin: 0;
+      border: 0;
+      display: block;
+    }
+    .ui-autocomplete .ui-menu-item-wrapper {
+      height: 32px !important;
+      padding: 0 12px !important;
+      display: flex !important;
+      align-items: baseline !important;          /* phrase + projectName share baseline (fix #2) */
+      gap: 12px;
+      min-width: 0;
+    }
+    /* Both inline spans inside the wrapper: kill the utils.js floats and let flex layout take over. */
+    .ui-autocomplete .ui-menu-item-wrapper > span {
+      float: none !important;
+      max-height: none !important;
+      padding: 0 !important;
+      line-height: 1.5;
+      color: var(--fg);
+      font-style: normal;
+    }
+    .ui-autocomplete .ui-menu-item-wrapper > span:first-child {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ui-autocomplete .ui-menu-item-wrapper > span:last-child {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-style: italic;
+      font-size: 12.5px;
+    }
+    .ui-autocomplete .ui-menu-item.ui-state-focus .ui-menu-item-wrapper,
+    .ui-autocomplete .ui-menu-item:hover .ui-menu-item-wrapper {
+      background: var(--accent-dim);
+    }
+    .ui-autocomplete .ui-menu-item.ui-state-focus .ui-menu-item-wrapper > span,
+    .ui-autocomplete .ui-menu-item:hover .ui-menu-item-wrapper > span {
+      color: var(--fg);
+    }
+    </style>
 </head>
 <body>
 
@@ -1357,22 +1510,41 @@ if (displayRepos) {
         });
     }
 
-    // ── Sort toggle (client-only placeholder; server honours ?sort=) ──
+    // ── Sort toggle (re-fetch /api/v1/search with new sort key) ──
+    // OpenGrok's SortOrder enum names are: lastmodtime / relevancy / fullpath.
+    // The data-sort attribute on each button uses short aliases; map to the API key here.
+    var SORT_KEY_MAP = { 'modified': 'lastmodtime', 'relevance': 'relevancy', 'path': 'fullpath' };
     window.changeSort = function (el) {
+        var sortAttr = el.getAttribute('data-sort');
+        var apiSort = SORT_KEY_MAP[sortAttr] || 'relevancy';
         var opts = document.querySelectorAll('.sort-option');
         for (var i = 0; i < opts.length; i++) opts[i].classList.remove('active');
         el.classList.add('active');
+
+        // Re-issue the same inline search as a regular submit, just with ?sort=apiSort appended.
+        if (!sbox) return;
+        var fd = new FormData(sbox);
+        var params = new URLSearchParams();
+        fd.forEach(function (v, k) {
+            if (typeof v === 'string' && v.length) {
+                var apiKey = FORM_TO_API_PARAM[k] || k;
+                params.append(apiKey, v);
+            }
+        });
+        var query = (fullInput && fullInput.value) ? fullInput.value.trim() : '';
+        if (query) params.set('full', query);
+        params.set('sort', apiSort);
+
+        var url = (window.contextPath || '') + '/api/v1/search?' + params.toString();
+        fetch(url, { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function (data) { renderResults(data, query); })
+            .catch(function () { if (sbox) sbox.submit(); });
     };
 
-    // ── Pagination (client-only placeholder) ──
-    var pageBtns = document.querySelectorAll('.pagination .page-btn:not(.nav-btn)');
-    for (var i = 0; i < pageBtns.length; i++) {
-        pageBtns[i].addEventListener('click', function () {
-            var all = document.querySelectorAll('.pagination .page-btn');
-            for (var j = 0; j < all.length; j++) all[j].classList.remove('active');
-            this.classList.add('active');
-        });
-    }
+    // Pagination is intentionally client-only for now (placeholder buttons in the static markup).
+    // The real search API only returns the first page; pagination would require server-side support
+    // (offset/limit params on SearchController), which is out of scope for the UI refactor.
 
     // ── Keyboard shortcut: Cmd/Ctrl+K to focus the primary search ──
     document.addEventListener('keydown', function (e) {
@@ -1408,43 +1580,98 @@ if (displayRepos) {
             '搜索 <strong>fulltext:<span class="query-term">' + escapeHtml(query) + '</span></strong>' +
             '（结果 ' + fromIdx + ' &mdash; ' + toIdx + ' 条，共 ' + resultCount + ' 条）按相关度排序';
 
+        var MAX_HITS_PER_CARD = 10;
         var html = '';
         if (fileCount > 0) {
+            // ── Group files by their parent directory so users see one "directory header"
+            //    per group rather than a dir strip on every single file card. This matches
+            //    the design: same-directory files share one accent-coloured dir link + a
+            //    single hit-count badge. The dir link jumps to that directory's xref listing.
+            var groups = Object.create(null);
             filePaths.forEach(function (path) {
-                var hits = resultsMap[path] || [];
-                var name = path.split('/').pop() || path;
-                html += '<div class="result-file-card">';
-                html += '<div class="result-file-header">';
-                html += '<a href="<%= ctxPath %><%= Prefix.XREF_P %>/' + encodeURIComponent(path) + '" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;text-decoration:none;">';
-                html += '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-                html += '<span class="file-path" title="' + escapeHtml(path) + '">' + escapeHtml(name) + '</span>';
-                html += '</a>';
-                html += '<div class="file-actions">';
-                html += '<a href="<%= ctxPath %><%= Prefix.HIST_L %>/' + encodeURIComponent(path) + '" class="action-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>History</a>';
-                html += '<a href="<%= ctxPath %><%= Prefix.XREF_P %>/' + encodeURIComponent(path) + '?a=true" class="action-btn"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Annotate</a>';
-                html += '<a href="<%= ctxPath %><%= Prefix.DOWNLOAD_P %>/' + encodeURIComponent(path) + '" class="action-btn"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>';
-                html += '</div></div>';
-                if (hits.length) {
-                    html += '<div class="result-lines">';
-                    hits.forEach(function (h) {
-                        var num  = h.lineNumber || '';
-                        var code = h.line || '';
-                        var tag  = h.tag || '';
-                        html += '<a href="<%= ctxPath %><%= Prefix.XREF_P %>/' + encodeURIComponent(path) + '#L' + encodeURIComponent(num) + '" class="result-line">';
-                        html += '<span class="line-num">' + escapeHtml(num) + '</span>';
-                        html += '<span class="line-code">';
-                        if (tag) html += '<span class="match">' + escapeHtml(tag) + '</span> ';
-                        html += escapeHtml(code) + '</span>';
-                        html += '</a>';
-                    });
-                    html += '</div>';
+                var lastSlash = path.lastIndexOf('/');
+                var dir = lastSlash >= 0 ? path.substring(0, lastSlash) : '';
+                if (!groups[dir]) groups[dir] = [];
+                groups[dir].push({ path: path, hits: resultsMap[path] || [] });
+            });
+
+            Object.keys(groups).forEach(function (dir) {
+                var files = groups[dir];
+                var totalHits = 0;
+                files.forEach(function (f) { totalHits += f.hits.length; });
+
+                // Group header: directory path link + matches badge.
+                html += '<div class="result-group-header">';
+                html += '<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+                if (dir) {
+                    html += '<a href="<%= ctxPath %><%= Prefix.XREF_P %>/' + encodeURIComponent(dir) + '" title="' + escapeHtml(dir) + '">';
+                    html += escapeHtml(dir);
+                    html += '</a>';
+                } else {
+                    html += '<span class="group-root">(项目根)</span>';
                 }
+                html += '<span class="group-count" title="' + totalHits + ' 条匹配">' + totalHits + '</span>';
                 html += '</div>';
+
+                files.forEach(function (f) {
+                    var path = f.path;
+                    var hits = f.hits;
+                    var name = path.split('/').pop() || path;
+                    html += '<div class="result-file-card">';
+                    html += '<div class="result-file-header">';
+                    html += '<a href="<%= ctxPath %><%= Prefix.XREF_P %>/' + encodeURIComponent(path) + '" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;text-decoration:none;">';
+                    html += '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+                    html += '<span class="file-path" title="' + escapeHtml(path) + '">' + escapeHtml(name) + '</span>';
+                    html += '</a>';
+                    html += '<div class="file-actions">';
+                    html += '<a href="<%= ctxPath %><%= Prefix.HIST_L %>/' + encodeURIComponent(path) + '" class="action-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>History</a>';
+                    html += '<a href="<%= ctxPath %><%= Prefix.XREF_P %>/' + encodeURIComponent(path) + '?a=true" class="action-btn"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Annotate</a>';
+                    html += '<a href="<%= ctxPath %><%= Prefix.DOWNLOAD_P %>/' + encodeURIComponent(path) + '" class="action-btn"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>';
+                    html += '</div></div>';
+                    if (hits.length) {
+                        html += '<div class="result-lines">';
+                        hits.forEach(function (h, i) {
+                            var num  = h.lineNumber || '';
+                            var code = h.line || '';
+                            var tag  = h.tag || '';
+                            var lineClass = (i >= MAX_HITS_PER_CARD) ? 'result-line result-line-overflow' : 'result-line';
+                            html += '<a href="<%= ctxPath %><%= Prefix.XREF_P %>/' + encodeURIComponent(path) + '#L' + encodeURIComponent(num) + '" class="' + lineClass + '">';
+                            html += '<span class="line-num">' + escapeHtml(num) + '</span>';
+                            html += '<span class="line-code">';
+                            if (tag) html += '<span class="match">' + escapeHtml(tag) + '</span> ';
+                            html += escapeHtml(code) + '</span>';
+                            html += '</a>';
+                        });
+                        html += '</div>';
+                        if (hits.length > MAX_HITS_PER_CARD) {
+                            var hiddenCount = hits.length - MAX_HITS_PER_CARD;
+                            html += '<button type="button" class="result-expand-btn">';
+                            html += '<svg class="arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
+                            html += ' 显示剩余 <strong>' + hiddenCount + '</strong> 条匹配行';
+                            html += '</button>';
+                        }
+                    }
+                    html += '</div>';   // /result-file-card
+                });
             });
         } else {
             html = '<div class="results-empty">未找到匹配项</div>';
         }
         resultsList.innerHTML = html;
+
+        // Wire the expand buttons (delegated once per render; cheap).
+        if (resultsList._expandBound) return;
+        resultsList._expandBound = true;
+        resultsList.addEventListener('click', function (ev) {
+            var btn = ev.target.closest('.result-expand-btn');
+            if (!btn) return;
+            var card = btn.closest('.result-file-card');
+            if (!card) return;
+            var expanded = card.classList.toggle('expanded');
+            var hidden  = card.querySelectorAll('.result-line-overflow').length;
+            btn.innerHTML = '<svg class="arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>'
+                + (expanded ? ' 收起' : (' 显示剩余 <strong>' + hidden + '</strong> 条匹配行'));
+        });
     }
 
     // /api/v1/search expects different param names than the legacy form:
@@ -1501,7 +1728,48 @@ if (displayRepos) {
     // callback would never be pushed). utils.js iterates document.domReady on
     // $(document).ready, by which time window.domReadyMenu is defined.
     if (document && Array.isArray(document.domReady)) {
-        document.domReady.push(function () { window.domReadyMenu(); });
+        document.domReady.push(function () {
+            // Override utils.js's getSelectedProjectNames (utils-0.0.48.js:2184).
+            // The default reads from $("#project").searchableOptionList(), which
+            // requires the legacy searchable-option-list widget mounted on
+            // <select id="project"> — a structure our chip-based UI does not have.
+            // If un-overridden, the suggest call goes out with projects=[] and
+            // SuggesterServiceImpl.getNamedIndexReaders streams over an empty list,
+            // so every autocomplete dropdown ends up empty regardless of what the
+            // user types. Our chip UI keeps a hidden <select id="project-select"
+            // multiple> in sync via refreshProjectSelect(), so read selected names
+            // from there.
+            window.getSelectedProjectNames = function () {
+                var ps = document.getElementById('project-select');
+                if (!ps) return [];
+                var names = [];
+                for (var i = 0; i < ps.options.length; i++) {
+                    if (ps.options[i].selected) names.push(ps.options[i].value);
+                }
+                return names;
+            };
+            // The 5 inputs #full/#defs/#refs/#path/#hist already get jQuery UI
+            // autocomplete widgets attached via initAutocompleteForField in
+            // utils.js (utils-0.0.48.js:1743-1747). Each call passes the matching
+            // "field" argument ("full" / "defs" / "refs" / "path" / "hist") which
+            // is closed over and reached getAutocompleteMenuData() at keystroke
+            // time, becoming the `field` query parameter of /api/v1/suggest —
+            // i.e. typing in #defs asks for symbol definitions, typing in #refs
+            // asks for symbol usages, etc. No per-input wiring needed here.
+            window.domReadyMenu();
+
+            // Pin popup width to its input width on every open. jQuery UI's default
+            // _resizeMenu picks the max of widest item.outerWidth / input.outerWidth,
+            // which lets long phrases stretch the popup past the input. We override
+            // here so each popup exactly matches its input — and because each input
+            // is bound separately, #defs / #refs / #path / #hist automatically get
+            // their own correct (potentially narrower) width.
+            $('#full, #defs, #refs, #path, #hist').on('autocompleteopen', function () {
+                var $input = $(this);
+                var $ul = $input.autocomplete('widget');
+                $ul.outerWidth($input.outerWidth());
+            });
+        });
     }
 })();
 </script>
