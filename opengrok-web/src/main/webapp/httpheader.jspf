@@ -54,6 +54,7 @@ org.opengrok.web.Scripts"
       class="<%= request.getServletPath().length() > 0 ? request.getServletPath().substring(1) : "" %>">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex,nofollow" />
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="generator" content="{OpenGrok <%=Info.getVersion()%> (<%=Info.getRevision()%>)" />
