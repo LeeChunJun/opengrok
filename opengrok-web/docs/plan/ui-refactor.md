@@ -1231,3 +1231,146 @@ git revert HEAD -- opengrok-web/src/main/webapp/index.jsp
   1. 排序切换无效果但 button active class 切换了：说明 fetch 没发，看 DevTools Network；可能是 `<form id="sbox">` 没找到 → 加 `if (!sbox) return;` 守卫已经在
   2. 排序结果不按预期：检查 OpenGrok `SortOrder.LASTMODIFIED` 等的 `name` 值是否拼对
   3. 展开按钮 hover 仍然不清：可能是浏览器缓存，Ctrl+Shift+R 再试
+
+---
+
+## 六、Phase 3 阶段记录
+
+### 修改 #2 — history.jsp 重构为新版 UI（目录历史 / 文件历史）
+
+- **计划日期**：2026-08-09
+- **改动范围**：仅 `opengrok-web/src/main/webapp/history.jsp` 一个文件
+- **未改动**：`mast.jsp` / `minisearch.jspf` / `pageheader.jspf` / `httpheader.jspf` / `foot.jspf` / 其他 tag / 其他 JSP / 后端 Java / 任何 CSS 或 JS 文件
+
+#### 准备项（执行前已记录）
+- [x] 已通读 `opengrok-web/docs/ui/directory-history.html`（新 UI 设计稿）
+- [x] 已通读当前 `history.jsp` / `mast.jsp` / `minisearch.jspf` / `pageheader.jspf` / `httpheader.jspf`
+- [x] 已通读 `js/utils-0.0.48.js` 的 `domReadyHistory / toggle_revtags / toggle_filelist / domReadyMenu / initMinisearchAutocomplete`
+- [x] 已研究 list.jsp 重构模式（commit `31a9eff23`）作为本阶段参照
+
+#### 变更点（执行前已说明）
+
+1. **保留 CDDL HEADER**，在原 Copyright 行后追加一行 `Portions Copyright (c) 2026, UI Refactor.`
+2. **新增 page import**：`java.util.Locale`、`org.opengrok.indexer.configuration.Project`、`org.opengrok.indexer.web.Prefix`、`org.opengrok.web.PageConfig`
+3. **保留**顶部 setup 脚本段（计算 `hist`、写 request attribute、`response.sendError(404)` 处理）
+4. **新增 `<script>`**：`document.domReady.push(function() { domReadyHistory(); })` + `domReadyMast` + `pageReadyMast`
+5. **替换**原来的 3 个分散 include（`<%@ include file="/httpheader.jspf" %>` + `<%@ include file="/pageheader.jspf" %>` + `<%@ include file="/minisearch.jspf" %>`）为单个 `<%@ include file="/mast.jsp" %>` —— 与 list.jsp 模式一致
+6. **保留**完整的 table render 逻辑：
+   - `<form action="<%= context + Prefix.DIFF_P + uriEncodedName %>">` 包裹整张表（diff 选择）
+   - 每行 4 列：Revision / Date / Author / Comments
+   - 文件历史（`!cfg.isDir()`）每行有 2 个 radio（From / To）选择 diff 范围
+   - 目录历史（`cfg.isDir()`）只渲染 hash 链接
+   - 非 active revision 用 `<del>` 划线
+   - `Util.linkifyPattern` 处理 bug / review 链接
+   - 消息折叠（`showSummary = entry.getMessage().length() > summaryLength`）
+   - 修改文件列表（`hist.hasFileList()` 时显示 `toggle_filelist` 触发器）
+   - Revision tags 行（`hist.hasTags()` 时显示 `toggle_revtags` 触发器）
+7. **保留** `Util.createSlider()` 生成的 pagination HTML，通过 CSS 重写成 `.page-btn` 风格
+8. **保留** RSS feed 链接（`<%= context + Prefix.RSS_P + uriEncodedName %>`）
+9. **保留** strike-note（striked revision 提示）
+10. **替换** `<div id="Masthead">History log of ...</div>` 为新设计：
+    - `<header class="header">` Logo + 「OpenGrok Code Search」+ 「代码浏览」链接
+    - `<div class="compact-nav">` Home / History(active) / Search box / current directory checkbox
+    - `<nav class="dir-path">` 完整路径面包屑
+    - `<div class="container">`
+      - `<div class="history-title">History log of /path/ (Results X – Y of Z)</div>` + 可选 `<<< Hide revision tags` 链接
+      - `<div class="history-table-wrapper">` + `<table class="history-table">`
+      - `<div class="pagination">`（re-style `Util.createSlider()` 输出）
+      - strike-note（条件渲染）
+      - RSS 链接
+    - `<div class="dir-footer">` 由 OpenGrok 托管 + 最后索引更新时间 + 版本号短哈希
+11. **日期格式**改：原来 `dd-MMM-yyyy` 单行 → 设计稿的 `dd-MMM` + `yyyy` 两行（`<div class="date-day">` + `<div class="date-year">`）
+12. **CSS 防御层**（沿用 list.jsp 思路）：`html.history_jsp #whole_header, #Masthead, #bar { display: none !important; }` 隐藏 mast.jsp 的 legacy chrome；`#content { margin-top: 0 !important; padding: 0 !important; }` 取消 70px 顶部留白
+13. **新增 `<script>` 块**（约 50 行）：
+    - 移除 legacy chrome DOM（`['whole_header', 'Masthead', 'bar', 'footer']`）防止 utils.js 的 `$("#search")` 抓到 legacy hidden input 而不绑新 input
+    - `document.domReady.push(function() { domReadyMenu(true); })` —— 用我们可见的 `<input id="search">` 启动 autocomplete
+    - toggle_revtags / toggle_filelist 的 anchor 文字翻转（utils.js 只翻转内容 visibility，不翻转 anchor 文字）
+14. **不动 minisearch.jspf** —— 它被 `mast.jsp`（xref 视图 list.jsp）引用；我们在 history.jsp 通过 CSS 隐藏 `#bar` + JS 移除 DOM 节点即可，与 list.jsp 一致
+
+#### 修复 #2a — 移除 scriptlet 注释里的 `<%{ %>` 字面量（避免 JSP 解析器二次解释）
+
+- **触发时间**：本地启动 Jetty 验证时 curl `/history.jsp`，发现返回 HTML 里出现奇怪的字面量
+- **现象**：页面输出在 `</script>` 后出现单独一行 ` block` + `/* history-page render end */` + `%>` + `<footer>`
+- **根因**：JSP 解析器在 `<% %>` scriptlet 内扫描时，看到 `// closes the outer <%{ %> block` 里的 `<%{ %>` 字面量，会**重新解释为新的 scriptlet 边界**——`}` 关闭内层 scriptlet，然后 `block` 作为字面量输出，然后下一行的 `/* comment */` 落到新 scriptlet 外又成为字面量
+- **修复**：把 scriptlet 末尾的注释改成不含 `<%` / `%>` 的安全文本（删掉两行 `}` 后的注释，`/* history-page render end */` 保留）
+- **影响范围**：仅 history.jsp 末尾约 4 行（`%><%@ include file="/foot.jspf" %>` 之前的闭合 scriptlet 段）
+- **验证**：`/history.jsp` 返回内容不再含 ` block` / `history-page render end` 字面量
+
+#### 备份点（回滚用）
+
+| 项 | 值 |
+| --- | --- |
+| 修改前文件 | `opengrok-web/src/main/webapp/history.jsp`（459 行，原版） |
+| 修改前 git 提交 | `31a9eff23`（list.jsp 重构后） |
+| 修改后文件 | `opengrok-web/src/main/webapp/history.jsp`（1026 行，重构版） |
+| 修改后文件大小 | 约 51 KB |
+| 修改后 git 状态 | 未提交，工作区脏（待验收后决定 `git add` / `git commit` / `git checkout`） |
+
+#### 回滚方案
+
+**方案 A —— 整文件回滚（最干净，推荐）**：
+```bash
+git checkout -- opengrok-web/src/main/webapp/history.jsp
+```
+
+**方案 B —— 手工对照本节「变更点」逐项还原**：
+1. 删除 CDDL 末尾的 `Portions Copyright (c) 2026, UI Refactor.` 行
+2. 删除 4 个新增的 `page import` 行
+3. 把 `<%@ include file="/mast.jsp" %>` 替换为原来的 3 个分散 include（`httpheader.jspf` + `pageheader.jspf` + `minisearch.jspf`）
+4. 删除内联 `<style>` 块（约 400 行）
+5. 删除 `<div id="history-page">` 整块（含 `<header>` + `<style>` 之后的 HTML 到 `<script>`）
+6. 恢复原来 `<div id="Masthead">History log of ...</div>` 和表格 form/table 渲染（参考 git HEAD 的 history.jsp）
+7. 删除末尾新增的 `<script>` 块
+
+#### 验收结果
+
+⏳ **待用户验收**
+
+请用户重启 Jetty 后访问 `/history/<项目>/<path>` 验证：
+- 浏览器**硬刷新**（Ctrl+Shift+R）确保 CSS 缓存刷新
+- `/history/<项目>/`（目录历史）和 `/history/<项目>/<文件>`（文件历史）两种形态都验证
+
+| # | 验收点 | 期望 |
+| --- | --- | --- |
+| 1 | 页面整体布局 | header(白底 logo + OpenGrok Code Search + 代码浏览链接) + compact-nav(Home/History active + Search box + current dir checkbox) + breadcrumb + 单列 container |
+| 2 | compact-nav Home 链接 | 跳转到 `/source/`（首页） |
+| 3 | compact-nav History pill | 蓝色 active 状态，鼠标 hover 不变色 |
+| 4 | Search box | 输入框带 magnifier icon；右侧「Search」按钮 |
+| 5 | Current directory checkbox | 默认勾选，label「current directory」；鼠标 hover 浅灰底 |
+| 6 | 标题行 | `History log of /<project>/<path>/ (Results X – Y of Z)` |
+| 7 | 历史表格 | 4 列（Revision / Date / Author / Comments），thead 浅灰背景，行 hover 浅灰底 |
+| 8 | Revision 列 | hash 用 mono 字体蓝色链接；文件历史每行下方有 2 个 radio（From / To）带文字标签 |
+| 9 | Date 列 | 上面 `dd-MMM` 黑色 mono，下面 `yyyy` 灰色 mono |
+| 10 | Author 列 | name 加粗 + email 灰色 mono（userPage 配置时 email 包裹 `<...>`） |
+| 11 | Comments 列 | entry 用 `•` 前缀，bullet 用 `*` 前缀；消息 >10 字符折叠显示 |
+| 12 | 折叠消息 | 「show more ...」点击展开；「... show less」点击收起 |
+| 13 | Modified files | 每行 entry 下方可能列出文件路径列表（mono 字体蓝色链接） |
+| 14 | Toggle modified files | thead 右上 `<<< Hide modified files` 点击切换显示，文字翻转为 `>>> Show modified files` |
+| 15 | Revision tags | 如有 tags 行，初始折叠；标题行右侧 `<<< Hide revision tags` 点击切换 |
+| 16 | Pagination | 底部 page-btn 风格分页，当前页蓝色高亮，前后页可点 |
+| 17 | Striked revision | 非 active 的 revision hash 用 `<del>` 划线，下方「Note: ...」说明 |
+| 18 | RSS feed | 底部橙色 RSS feed 链接（`/rss/<path>`），点击跳 RSS XML |
+| 19 | Footer | `由 OpenGrok 托管 · 最后索引更新：<日期> · <version> (<short-rev>)` |
+| 20 | Legacy chrome 隐藏 | DevTools Elements 看不到 `#whole_header` / `#Masthead` / `#bar`（CSS + JS 双重清理） |
+| 21 | Search autocomplete | 在 Search box 输入字符，弹出 jQuery UI autocomplete 下拉（如 suggester 已 enable） |
+| 22 | 响应式 | 768px / 600px / 380px 三档断点，table 横向滚动 + nav 折叠图标-only 模式 |
+
+#### 用户操作（让改动生效）
+
+> **必须重启 Jetty** —— `mvn jetty:run` 模式用的是 JSPC 预编译产物 `target/jspc/.../history_jsp.class`，运行时不会自动 watch .jsp 改动
+>
+> ```powershell
+> # 停掉当前 Jetty 进程（如果还在运行）
+> Get-Process -Name "java" | Where-Object { $_.CommandLine -like "*jetty*" } | Stop-Process -Force
+>
+> # 重新启动
+> cd D:\AppsData\deploy\opengrok\opengrok-web
+> ..\mvnw.cmd jetty:run
+>
+> # 浏览器硬刷新
+> # Ctrl+Shift+R / Cmd+Shift+R
+> ```
+
+---
+
+
