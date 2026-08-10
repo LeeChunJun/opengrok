@@ -130,7 +130,6 @@ org.opengrok.indexer.web.Util"
 
         // We have potentially a lots of results to show: create a slider for them
         request.setAttribute("history.jsp-slider", Util.createSlider(startIndex, max, totalHits, request));
-        Date dateForLastIndexRun = cfg.getEnv().getDateForLastIndexRun();
 
         RuntimeEnvironment env = cfg.getEnv();
         String uriEncodedName = cfg.getUriEncodedPath();
@@ -152,16 +151,43 @@ org.opengrok.indexer.web.Util"
             reviewPattern = Pattern.compile(reviewRegex);
         }
 
-        Format dayFmt = new SimpleDateFormat("dd-MMM", Locale.ENGLISH);
-        Format yearFmt = new SimpleDateFormat("yyyy", Locale.ENGLISH);
+        Format dayFmt = new SimpleDateFormat("M月d日", Locale.CHINA);
+        Format yearFmt = new SimpleDateFormat("yyyy年", Locale.CHINA);
 
         int revision2Index = Math.max(cfg.getIntParam(QueryParameters.REVISION_2_PARAM, -1), 0);
         int revision1Index = cfg.getIntParam(QueryParameters.REVISION_1_PARAM, -1) < revision2Index ?
                 revision2Index + 1 : cfg.getIntParam(QueryParameters.REVISION_1_PARAM, -1);
         revision2Index = revision2Index >= hist.getHistoryEntries().size() ? hist.getHistoryEntries().size() - 1 : revision2Index;
 
-        String[] pathSegs = path.split("/");
-        StringBuilder cum = new StringBuilder();
+        // Strip the leading project prefix from `path` so the title and
+        // breadcrumb don't double up. cfg.getPath() is the absolute path
+        // from source root, which for /history/<proj>/<dir> looks like
+        // "/<proj>/<dir>" (already includes the project name). Without this
+        // stripping the title reads "/mosaic//mosaic/mosaic-tty//" instead
+        // of "/mosaic/mosaic-tty/".
+        String subPath = path;
+        if (project != null) {
+            String prefix = "/" + project.getName();
+            if (subPath.startsWith(prefix)) {
+                subPath = subPath.substring(prefix.length());
+            }
+        }
+        if (subPath.startsWith("/")) {
+            subPath = subPath.substring(1);
+        }
+        // cfg.getPath() for a directory ends with "/", which would cause
+        // double slashes in the title/breadcrumb once we add our own trailing
+        // slash for directories. Trim any trailing slash here.
+        while (subPath.endsWith("/")) {
+            subPath = subPath.substring(0, subPath.length() - 1);
+        }
+        String titlePathStr;
+        if (project != null) {
+            titlePathStr = "/" + project.getName()
+                    + (subPath.isEmpty() ? "/" : "/" + subPath + (cfg.isDir() ? "/" : ""));
+        } else {
+            titlePathStr = subPath.isEmpty() ? "/" : ("/" + subPath + (cfg.isDir() ? "/" : ""));
+        }
 %>
 <style>
 /* ── UI refactor 3a — directory-history styles ── */
@@ -643,16 +669,6 @@ tr.revtags-hidden { display: none; }
     font-family: var(--font-sans);
 }
 
-/* ── Footer ── */
-.dir-footer {
-    text-align: center;
-    font-size: 12px;
-    color: var(--muted);
-    padding: 16px 0 24px;
-}
-.dir-footer a { color: var(--accent); text-decoration: none; }
-.dir-footer a:hover { text-decoration: underline; }
-
 /* ── Responsive ── */
 @media (max-width: 768px) {
     .compact-nav { padding: 8px 16px; }
@@ -740,25 +756,30 @@ tr.revtags-hidden { display: none; }
         <a href="<%= context %>/">Home</a>
         <span class="path-sep">/</span><%
             if (project != null) { %>
-        <a href="<%= context %><%= Prefix.XREF_P %>/<%= Util.uriEncodePath(project.getName()) %>"><%= Util.htmlize(project.getName()) %></a>
-        <span class="path-sep">/</span><%
+        <a href="<%= context %><%= Prefix.XREF_P %>/<%= Util.uriEncodePath(project.getName()) %>"><%= Util.htmlize(project.getName()) %></a><%
             }
-            for (int si = 0; si < pathSegs.length; si++) {
-                if (pathSegs[si].isEmpty()) continue;
-                cum.append("/").append(pathSegs[si]);
-                if (si == pathSegs.length - 1) { %>
-        <span class="path-current"><%= Util.htmlize(pathSegs[si]) %></span><%
-                } else { %>
-        <a href="<%= context %><%= Prefix.XREF_P %><%= Util.uriEncodePath(cum.toString()) %>/"><%= Util.htmlize(pathSegs[si]) %></a>
+            // Render only the project-relative portion of the path (subPath).
+            // The project link above already covers the project segment; the
+            // segments below would otherwise duplicate it.
+            if (!subPath.isEmpty()) { %><span class="path-sep">/</span><%
+                String[] subSegs = subPath.split("/");
+                String prefixRoot = "/" + (project != null ? Util.uriEncodePath(project.getName()) : "");
+                StringBuilder subBuilder = new StringBuilder(prefixRoot);
+                for (int si = 0; si < subSegs.length; si++) {
+                    if (subSegs[si].isEmpty()) continue;
+                    subBuilder.append("/").append(subSegs[si]);
+                    if (si == subSegs.length - 1) { %>
+        <span class="path-current"><%= Util.htmlize(subSegs[si]) %></span><%
+                    } else { %>
+        <a href="<%= context %><%= Prefix.XREF_P %><%= Util.uriEncodePath(subBuilder.toString()) %>/"><%= Util.htmlize(subSegs[si]) %></a>
         <span class="path-sep">/</span><%
+                    }
                 }
             } %>
     </nav>
     <div class="container">
         <div class="history-title">
-            History log of <span class="path">/<%
-                if (project != null) { %><%= Util.htmlize(project.getName()) %>/<% }
-                if (!path.isEmpty()) { %><%= Util.htmlize(path) %>/<% } %></span>
+            History log of <span class="path"><%= Util.htmlize(titlePathStr) %></span>
             (Results <strong> <%= totalHits != 0 ? startIndex + 1 : 0 %> – <%= startIndex + thisPageIndex %></strong> of <strong><%= totalHits %></strong>)
             <% if (hist.hasTags()) { %>
             <a href="#" class="revtags-toggle-anchor" onclick="toggle_revtags(); return false;">&lt;&lt;&lt; Hide revision tags</a>
@@ -960,15 +981,6 @@ tr.revtags-hidden { display: none; }
         <p class="strike-note"><strong>Note:</strong> No associated file changes are available for revisions with strike-through numbers (eg. <del>1.45</del>)</p>
         <% } %>
         <p class="rssbadge"><a href="<%= context + Prefix.RSS_P + uriEncodedName %>" title="RSS XML Feed of latest changes"><span id="rssi"></span>RSS feed</a></p>
-    </div>
-    <div class="dir-footer">
-        由 <a href="https://oracle.github.io/opengrok/">OpenGrok</a> 托管<%
-            if (dateForLastIndexRun != null) {
-                SimpleDateFormat lastIdxFmt = new SimpleDateFormat("yyyy 年 M 月 d 日 HH:mm zzz", Locale.US);
-                String lastIdxText = lastIdxFmt.format(dateForLastIndexRun); %>
-        &nbsp;·&nbsp; 最后索引更新：<%= lastIdxText %><%
-            } %>
-        &nbsp;·&nbsp; <%= Info.getVersion() %> (<%= Info.getShortRevision() %>)
     </div>
 </div>
 <script type="text/javascript">

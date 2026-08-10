@@ -1719,6 +1719,32 @@ if (displayRepos) {
         });
     }
 
+    // ── Auto-trigger inline search if URL contains a 'full' query param ──
+    // This happens when the user submits from the mini-search box on another
+    // page (e.g. /history/mosaic/mosaic-tty); minisearch.jspf redirects to /?
+    // with the form fields as query params, and we render the results inline
+    // here so the user never sees the legacy /search JSP.
+    (function () {
+        var urlParams = new URLSearchParams(window.location.search);
+        var initialQuery = urlParams.get('<%= QueryParameters.FULL_SEARCH_PARAM %>');
+        if (!initialQuery || !initialQuery.trim()) return;
+        if (!sbox || !fullInput) return;
+        // Defer one tick so any post-load chip sync / form pre-population
+        // (e.g. projectSelect option.selected = chip.selected) finishes first
+        // and FormData picks up the right project chips.
+        Promise.resolve().then(function () {
+            performInlineSearch();
+            // Clean the URL via replaceState so that reloading the page does not
+            // re-trigger the search, and the forward button after a back-nav
+            // doesn't double-fire. Leave the query text in the input (fullInput)
+            // so the user can refine it.
+            try {
+                var cleanUrl = window.location.pathname + window.location.hash;
+                window.history.replaceState({}, document.title, cleanUrl);
+            } catch (_) { /* very old browsers: ignore */ }
+        });
+    })();
+
     // ── Initial sync: make sure hidden select matches default chip state ──
     refreshProjectSelect();
 

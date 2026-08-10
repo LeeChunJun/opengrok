@@ -31,7 +31,7 @@ org.opengrok.indexer.web.Util"%><%
         String context = request.getContextPath();
 %>
 
-<form action="<%= context + Prefix.SEARCH_P %>">
+<form action="<%= context + Prefix.SEARCH_P %>" id="minisearch-form">
 <div id="bar">
     <ul>
         <li><a href="<%= context %>/"><span id="home"></span>Home</a></li><%
@@ -114,6 +114,32 @@ org.opengrok.indexer.web.Util"%><%
         </form>
         <script type="text/javascript">/* <![CDATA[ */
             document.domReady.push(function() { domReadyMenu(true); });
+            // Intercept mini-search submission so it routes through the new home
+            // page (which renders results inline via /api/v1/search), instead of
+            // navigating to the legacy /search JSP. The form's action attribute
+            // is left as <%= Prefix.SEARCH_P %> so this remains a JS-only opt-in;
+            // clients without JS still land on /search (backward compatibility).
+            document.domReady.push(function() {
+                var f = document.getElementById('minisearch-form');
+                if (!f) return;
+                f.addEventListener('submit', function(ev) {
+                    ev.preventDefault();
+                    var params = new URLSearchParams();
+                    var els = f.querySelectorAll('input[name], select[name], textarea[name]');
+                    for (var i = 0; i < els.length; i++) {
+                        var el = els[i];
+                        if (el.disabled) continue;
+                        if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) continue;
+                        if (el.type === 'submit' || el.type === 'button' || el.type === 'reset') continue;
+                        var v = el.value;
+                        if (typeof v === 'string' && v.length) {
+                            params.append(el.name, v);
+                        }
+                    }
+                    var url = '<%= context %>/' + (params.toString() ? '?' + params.toString() : '');
+                    window.location.href = url;
+                });
+            });
             /* ]]> */
         </script>
     </header>
