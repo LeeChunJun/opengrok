@@ -16,135 +16,237 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2007, 2025, Oracle and/or its affiliates. All rights reserved.
-Portions Copyright (c) 2020, Chris Fraire <cfraire@me.com>.
+Copyright (c) 2007, 2026, Oracle and/or its affiliates. All rights reserved.
+Portions Copyright 2011 Jens Elkner.
+Portions Copyright (c) 2026, UI Refactor.
 --%>
+
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@ page session="false" errorPage="error.jsp" import="
 org.opengrok.indexer.configuration.Project,
 org.opengrok.web.PageConfig,
 org.opengrok.indexer.web.Prefix,
 org.opengrok.indexer.web.QueryParameters,
-org.opengrok.indexer.web.Util"%><%
-    /* ---------------------- minisearch.jspf start --------------------- */
-{
-        PageConfig cfg = PageConfig.get(request);
-        String context = request.getContextPath();
-%>
+org.opengrok.indexer.web.Util"%>
 
-<form action="<%= context + Prefix.SEARCH_P %>" id="minisearch-form">
-<div id="bar">
-    <ul>
-        <li><a href="<%= context %>/"><span id="home"></span>Home</a></li><%
-    if (!cfg.hasHistory()) {
-        %><li><span id="history"></span><span class="c">History</span></li><%
-    } else {
-        %><li><a href="<%= context + Prefix.HIST_L + cfg.getUriEncodedPath()
-            %>"><span id="history"></span>History</a></li><%
-    }
-    if (!cfg.hasAnnotations() /* || cfg.getPrefix() == Prefix.HIST_S */ ) {
-        %><li><span class="c"><span class="annotate"></span>Annotate</span></li><%
-    } else if (cfg.annotate()) {
-        %><li><span id="toggle-annotate-by-javascript" style="display: none"><a
-            href="#" onclick="toggle_annotations(); return false;"
-            title="Show or hide line annotation (revisions, authors)."
-            ><span class="annotate"></span>Annotate</a></span><span
-            id="toggle-annotate"><a href="#"><span class="annotate"></span>
-            Annotate</a></span></li><%
-    } else if (cfg.getPrefix() == Prefix.HIST_L) {
-        %><li>
-            <a href="#"
-               onclick="window.location = '<%= context + Prefix.XREF_P + cfg.getUriEncodedPath() %>'
-               // taken from get_annotations() from utils.js
-               + '?<%= QueryParameters.ANNOTATION_PARAM_EQ_TRUE %>'
-               + (document.rev && document.rev() ?
-                       '&amp;<%= QueryParameters.REVISION_PARAM_EQ %>'
-               + encodeURIComponent(document.rev()) : '')
-               + (window.location.hash ?
-                       '&amp;<%= QueryParameters.WINDOW_HASH_PARAM_EQ %>'
-               + window.location.hash.substring(1, window.location.hash.length) : '');
-                           return false;">
-                <span class="annotate"></span>
-                Annotate
-            </a>
-        </li><%
-    } else {
-        %><li><a href="#" onclick="get_annotations(); return false;"
-            ><span class="annotate"></span>Annotate</a></li><%
-    }
-    if (!cfg.isDir()) {
-        if (cfg.getPrefix() == Prefix.XREF_P) {
-        %><li><a href="#" onclick="lntoggle();return false;"
-            title="Show or hide line numbers (might be slower if file has more than 10 000 lines).">
-              <span id="line"></span>Line#</a></li>
-          <li><a href="#" class="scopes-toggle"
-            title="Show or hide scopes window.">
-              <span id="scopes"></span>Scopes#</a></li>
-        <li><a href="#" id="navigate"
-            title="Show or hide symbol list.">
-              <span id="defbox"></span>Navigate#</a></li><%
-        }
-        %>
-	<li><a href="<%= context + Prefix.RAW_P + cfg.getUriEncodedPath() +
-            (cfg.getRequestedRevision().isEmpty() ? "" : "?" +
-            QueryParameters.REVISION_PARAM_EQ + Util.uriEncode(cfg.getRequestedRevision()))
-            %>"><span id="raw"></span>Raw</a></li>
-	<li><a href="<%= context + Prefix.DOWNLOAD_P + cfg.getUriEncodedPath() +
-            (cfg.getRequestedRevision().isEmpty() ? "" : "?" +
-            QueryParameters.REVISION_PARAM_EQ + Util.uriEncode(cfg.getRequestedRevision()))
-            %>"><span id="download"></span>Download</a></li>
-	<%
-    }
-        %><li><input type="text" id="search" name="<%= QueryParameters.FULL_SEARCH_PARAM %>"
-                  class="q" aria-label="Search"/></li>
-            <li><input type="submit" value="Search" class="submit" /></li><%
-    Project proj = cfg.getProject();
-    String[] vals = cfg.getSearchOnlyIn();
-        %><li><label><input id="minisearch-path" type="checkbox"
-                  name="<%= QueryParameters.PATH_SEARCH_PARAM %>" value='"<%= vals[0]
-            %>"' <%= vals[2] %>/> current directory</label></li>
-    </ul><%
-    if (proj != null) {
-    %>
-    <input id="minisearch-project" type="hidden" name="<%= QueryParameters.PROJECT_SEARCH_PARAM %>"
-           value="<%=proj.getName()%>" /><%
-    }
-%>
-    <input type="hidden" id="contextpath" value="<%=request.getContextPath()%>" />
-</div>
-        </form>
-        <script type="text/javascript">/* <![CDATA[ */
-            document.domReady.push(function() { domReadyMenu(true); });
-            // Intercept mini-search submission so it routes through the new home
-            // page (which renders results inline via /api/v1/search), instead of
-            // navigating to the legacy /search JSP. The form's action attribute
-            // is left as <%= Prefix.SEARCH_P %> so this remains a JS-only opt-in;
-            // clients without JS still land on /search (backward compatibility).
-            document.domReady.push(function() {
-                var f = document.getElementById('minisearch-form');
-                if (!f) return;
-                f.addEventListener('submit', function(ev) {
-                    ev.preventDefault();
-                    var params = new URLSearchParams();
-                    var els = f.querySelectorAll('input[name], select[name], textarea[name]');
-                    for (var i = 0; i < els.length; i++) {
-                        var el = els[i];
-                        if (el.disabled) continue;
-                        if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) continue;
-                        if (el.type === 'submit' || el.type === 'button' || el.type === 'reset') continue;
-                        var v = el.value;
-                        if (typeof v === 'string' && v.length) {
-                            params.append(el.name, v);
-                        }
-                    }
-                    var url = '<%= context %>/' + (params.toString() ? '?' + params.toString() : '');
-                    window.location.href = url;
-                });
-            });
-            /* ]]> */
-        </script>
-    </header>
-<div id="content">
-<% 
+<style>
+:root {
+    --border:    #d0d7de;
+    --accent:    #0969da;
+    --accent-dim: rgba(9,105,218,0.08);
+    --muted:     #57606a;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    --bg:        #f6f8fa;
+    --fg:        #24292f;
 }
-/* ---------------------- minisearch.jspf end --------------------- */
+
+.search-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.search-group {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+}
+
+.search-group:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.search-group .search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-group .search-input-wrap svg {
+    position: absolute;
+    left: 8px;
+    width: 14px;
+    height: 14px;
+    stroke: var(--muted);
+    fill: none;
+    stroke-width: 2;
+    pointer-events: none;
+}
+.search-group .search-input {
+    width: 170px;
+    height: 30px;
+    border: none;
+    padding: 0 8px 0 28px;
+    font-size: 12.5px;
+    font-family: var(--font-sans);
+    outline: none; background: transparent;
+    flex-shrink: 0;
+}
+.search-group .search-btn {
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    padding: 0 14px;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0 5px 5px 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: background 0.12s;
+    white-space: nowrap;
+}
+
+.search-group .search-btn:hover {
+    background: #f3f4f6;
+}
+
+.search-btn-icon {
+    display: none;
+}
+
+.current-dir-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12.5px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: background 0.12s;
+    flex-shrink: 0;
+    white-space: nowrap;
+    height: 30px;
+    box-sizing: border-box;
+}
+
+.current-dir-label:hover {
+    background: #f6f8fa;
+ }
+
+.current-dir-label input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+@media(max-width: 600px) {
+    .search-form {
+        gap: 6px; min-width: 0;
+    }
+
+    .search-group {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .search-group .search-input {
+        width: 70px;
+        min-width: 0;
+        font-size: 12px;
+    }
+
+    .search-group .search-btn {
+        padding: 0 8px;
+        gap: 0;
+    }
+
+    .search-btn-icon {
+        display: block;
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    .current-dir-label {
+        font-size: 0;
+        padding: 5px;
+        gap: 0;
+        height: auto;
+    }
+
+    .current-dir-label input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+    }
+}
+
+@media (max-width: 380px) {
+    .search-group .search-input-wrap {
+        display: none;
+    }
+
+    .search-group .search-btn {
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        padding: 6px;
+    }
+
+    .search-btn-icon {
+        width: 16px;
+        height: 16px;
+        stroke: var(--fg);
+    }
+
+    .current-dir-label {
+        padding: 4px;
+    }
+
+    .current-dir-label input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+    }
+}
+
+</style>
+
+<%--  minisearch.jspf start
+
+    minisearch.jspf — compact search form for the top-right of the
+    compact-nav. Reads `_chromeCtxPath` / `_chromeProject` / `_chromePath`
+    from pageContext (set by mast.jsp) or falls back to `ctxPath` /
+    `project` / `path` (for direct callers like index.jsp that set
+    `ctxPath` via pageContext before this include).
+--%>
+<%
+    String _msCtxPath = (String) pageContext.getAttribute("_chromeCtxPath");
+    if (_msCtxPath == null) _msCtxPath = (String) pageContext.getAttribute("ctxPath");
+    if (_msCtxPath == null) _msCtxPath = request.getContextPath();
+    Project _msProject = (Project) pageContext.getAttribute("_chromeProject");
+    if (_msProject == null) _msProject = (Project) pageContext.getAttribute("project");
+    String _msPath = (String) pageContext.getAttribute("_chromePath");
+    if (_msPath == null) _msPath = (String) pageContext.getAttribute("path");
 %>
+<form action="<%= _msCtxPath %><%= Prefix.SEARCH_P %>" class="search-form" id="sbox">
+    <div class="search-group">
+        <div class="search-input-wrap">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+            <input type="text" id="search" name="<%= QueryParameters.FULL_SEARCH_PARAM %>" class="search-input" placeholder="Search..." aria-label="Search"/>
+        </div>
+        <button type="submit" class="search-btn">
+            <svg class="search-btn-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+            <span class="search-label">Search</span>
+        </button>
+    </div>
+    <% if (_msProject != null) { %>
+    <input id="minisearch-project" type="hidden" name="<%= QueryParameters.PROJECT_SEARCH_PARAM %>" value="<%= _msProject.getName() %>" />
+    <% } %>
+    <label class="current-dir-label" for="minisearch-path">
+        <input id="minisearch-path" type="checkbox" name="<%= QueryParameters.PATH_SEARCH_PARAM %>" value='"<%= _msPath != null ? _msPath : "" %>"' checked />
+        <span class="dir-label">current directory</span>
+    </label>
+</form>

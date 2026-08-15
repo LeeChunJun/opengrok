@@ -20,38 +20,42 @@ CDDL HEADER END
 
 Copyright (c) 2007, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright 2011 Jens Elkner.
-Portions Copyright (c) 2017-2018, 2020, Chris Fraire <cfraire@me.com>.
-Portions Copyright (c) 2020, Aleksandr Kirillov <alexkirillovsamara@gmail.com>.
-
---%><%--
-
-All pages, which include this fragment should use the following code snippet
-to set the title of the document before the include directive for this fragment:
-<pre>
-
-    cfg = PageConfig.get(request);
-    cfg.setTitle("your title");
-
-</pre>
+Portions Copyright (c) 2026, UI Refactor.
 --%>
-<%@page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" import="
+
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page import="
 org.opengrok.indexer.Info,
 org.opengrok.web.PageConfig,
 org.opengrok.indexer.web.Prefix,
 org.opengrok.indexer.web.Util,
-org.opengrok.web.Scripts"
-%><%
-/* ---------------------- httpheader.jsp start --------------------- */
+org.opengrok.web.Scripts"%>
+
+<%-- httpheader.jspf start
+
+    All pages, which include this fragment should use the following code snippet
+    to set the title of the document before the include directive for this fragment:
+    <pre>
+        cfg = PageConfig.get(request);
+        cfg.setTitle("your title");
+    </pre>
+
+    ctxPath is renamed to httpCtxPath so the calling JSP can also declare a String
+    "ctxPath" without colliding in the shared _jspService scope.
+--%>
+<%
 {
-    PageConfig cfg = PageConfig.get(request);
-    String styleDir = cfg.getCssDir();
-    String ctxPath = request.getContextPath();
+    PageConfig _chromeHttpCfg = PageConfig.get(request);
+    String styleDir = _chromeHttpCfg.getCssDir();
+    String httpCtxPath = request.getContextPath();
+    String servletPath = request.getServletPath();
     String dstyle = styleDir + '/' + "style-1.0.6.min.css";
     String pstyle = styleDir + '/' + "print-1.0.3.min.css";
     String mstyle = styleDir + '/' + "mandoc-1.0.0.min.css";
-%><!DOCTYPE html>
-<html lang="en"
-      class="<%= request.getServletPath().length() > 0 ? request.getServletPath().substring(1) : "" %>">
+
+%>
+<!DOCTYPE html>
+<html lang="en" class="<%= servletPath.length() > 0 ? servletPath.substring(1) : "" %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -63,9 +67,10 @@ org.opengrok.web.Scripts"
 <link rel="icon" href="<%=styleDir%>/img/favicon.svg">
 <link rel="mask-icon" href="<%=styleDir%>/img/mask-icon.svg" color="#000000">
 <link rel="apple-touch-icon" href="<%=styleDir%>/img/apple-touch-icon.png">
-<link rel="manifest" href="<%=ctxPath%>/manifest.json">
+<link rel="manifest" href="<%=httpCtxPath%>/manifest.json">
 <link rel="preload" href="<%=styleDir%>/font/SunSansRegular.woff2" as="font" type="font/woff2" crossorigin>
-<script type="text/javascript">/* <![CDATA[ */
+<script type="text/javascript">
+/* <![CDATA[ */
     (function () {
         try {
             var themeMode = localStorage.getItem('theme-mode');
@@ -78,17 +83,16 @@ org.opengrok.web.Scripts"
             // Ignore localStorage access errors and honor the OS setting.
         }
     }());
-/* ]]> */</script>
+/* ]]> */
+</script>
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/jquery-ui-1.12.1-custom.min.css" />
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/jquery-ui-1.12.1-custom.structure.min.css" />
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/jquery-ui-1.12.1-custom.theme.min.css" />
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/jquery.tooltip.min.css" />
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/jquery.tablesorter.min.css" />
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/searchable-option-list-2.0.3.min.css" />
-<link rel="stylesheet" type="text/css" media="all"
-    title="Default" href="<%= dstyle %>" />
-<link rel="alternate stylesheet" type="text/css" media="all"
-    title="Paper White" href="<%= pstyle %>" />
+<link rel="stylesheet" type="text/css" media="all" title="Default" href="<%= dstyle %>" />
+<link rel="alternate stylesheet" type="text/css" media="all" title="Paper White" href="<%= pstyle %>" />
 <link rel="stylesheet" type="text/css" href="<%= mstyle %>" media="all" />
 <link rel="stylesheet" type="text/css" href="<%= pstyle %>" media="print" />
 
@@ -99,35 +103,255 @@ org.opengrok.web.Scripts"
      *
      * @see Scripts
      */
-    cfg.addScript("jquery");
-    cfg.addScript("jquery-ui");
-    cfg.addScript("jquery-tablesorter");
-    cfg.addScript("tablesorter-parsers");
-    cfg.addScript("searchable-option-list");
-    cfg.addScript("utils");
-    cfg.addScript("jquery-caret");
+    _chromeHttpCfg.addScript("jquery");
+    _chromeHttpCfg.addScript("jquery-ui");
+    _chromeHttpCfg.addScript("jquery-tablesorter");
+    _chromeHttpCfg.addScript("tablesorter-parsers");
+    _chromeHttpCfg.addScript("searchable-option-list");
+    _chromeHttpCfg.addScript("utils");
+    _chromeHttpCfg.addScript("jquery-caret");
 
-if (cfg.getPrefix().equals(Prefix.HIST_L)) {
+if (_chromeHttpCfg.getPrefix().equals(Prefix.HIST_L)) {
     out.write("<link rel=\"alternate\" type=\"application/rss+xml\" " +
-        "title=\"RSS feed for " + Util.htmlize(cfg.getPath()) + "\" " +
-        "href=\"" + ctxPath + Prefix.RSS_P + Util.uriEncodePath(cfg.getPath()) + "\" />");
+        "title=\"RSS feed for " + Util.htmlize(_chromeHttpCfg.getPath()) + "\" " +
+        "href=\"" + httpCtxPath + Prefix.RSS_P + Util.uriEncodePath(_chromeHttpCfg.getPath()) + "\" />");
 }
 %>
-<link rel="search" href="<%=ctxPath%>/opensearch"
+
+<link rel="search" href="<%=httpCtxPath%>/opensearch"
     type="application/opensearchdescription+xml"
     title="OpenGrok Search for current project(s)" />
-<script type="text/javascript">/* <![CDATA[ */
-    window.contextPath = '<%= ctxPath %>';
-    document.xrefPath = '<%= request.getContextPath() + Prefix.XREF_P %>';
+<script type="text/javascript">
+/*  <![CDATA[ */
+    window.contextPath = '<%= httpCtxPath %>';
+    document.xrefPath = '<%= httpCtxPath + Prefix.XREF_P %>';
     document.pageReady = [];
     document.domReady = [];
 /* ]]> */
 </script>
-<%= cfg.getEnv().getIncludeFiles().getHttpHeaderIncludeFileContent(false) %>
-<title><%=cfg.getTitle()%></title><%
-    out.write(cfg.getHeaderData());
+<%= _chromeHttpCfg.getEnv().getIncludeFiles().getHttpHeaderIncludeFileContent(false) %>
+<title><%=_chromeHttpCfg.getTitle()%></title>
+<%
+    out.write(_chromeHttpCfg.getHeaderData());
 %>
-</head><%
+
+<style>
+/* ── UI refactor — shared chrome styles (loaded by every page that uses
+ * mast.jsp + foot.jspf: list.jsp, history.jsp, more.jsp, search.jsp).
+ *
+ * Defined here in httpheader.jspf so the CSS ships in the same <head> as
+ * the legacy stylesheet links; the new chrome uses class selectors (
+ * .common-page-header, .compact-nav, .dir-path, .common-page-footer)
+ * that don't conflict with the legacy ID-based selectors
+ * (#whole_header, #Masthead, #bar, #footer).
+ */
+
+:root {
+    --bg:        #f6f8fa;
+    --surface:   #ffffff;
+    --fg:        #24292f;
+    --muted:     #57606a;
+    --border:    #d0d7de;
+    --border-light: #eaeef2;
+    --accent:    #0969da;
+    --accent-dim: rgba(9,105,218,0.08);
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* ── Page Header (pageheader.jspf) ── */
+.header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.header-logo {
+    width: 28px; height: 28px;
+    background: var(--fg);
+    border-radius: 7px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+}
+.header-logo svg {
+    width: 14px; height: 14px;
+    stroke: #60a5fa; fill: none; stroke-width: 2.5;
+}
+.header-title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+.header-title span { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.header-link {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.12s;
+}
+.header-link:hover { color: var(--accent); }
+.header-link svg {
+    width: 14px; height: 14px;
+    stroke: currentColor; fill: none; stroke-width: 2;
+    vertical-align: -1px;
+    margin-right: 4px;
+}
+
+/* ── Compact Nav (mast.jsp + minisearch.jspf) ── */
+.compact-nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    gap: 12px;
+}
+.compact-nav-left { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.compact-nav-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.search-form { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.search-group {
+    display: flex; align-items: center;
+    border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+}
+.search-group:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.search-group .search-input-wrap { position: relative; display: flex; align-items: center; }
+.search-group .search-input-wrap svg {
+    position: absolute; left: 8px;
+    width: 14px; height: 14px;
+    stroke: var(--muted); fill: none; stroke-width: 2;
+    pointer-events: none;
+}
+.search-group .search-input {
+    width: 170px; height: 30px;
+    border: none;
+    padding: 0 8px 0 28px;
+    font-size: 12.5px;
+    font-family: var(--font-sans);
+    outline: none; background: transparent;
+    flex-shrink: 0;
+}
+.search-group .search-btn {
+    display: inline-flex; align-items: center;
+    height: 30px; padding: 0 14px;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0 5px 5px 0;
+    background: var(--bg); color: var(--fg);
+    font-size: 12.5px; font-weight: 500;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: background 0.12s;
+    white-space: nowrap;
+}
+.search-group .search-btn:hover { background: #f3f4f6; }
+.search-btn-icon { display: none; }
+.current-dir-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12.5px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: background 0.12s;
+    flex-shrink: 0;
+    white-space: nowrap;
+    height: 30px;
+    box-sizing: border-box;
+}
+.current-dir-label:hover { background: #f6f8fa; }
+.current-dir-label input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
+.nav-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 14px;
+    border-radius: 6px;
+    color: var(--fg);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 13px;
+    transition: background 0.12s, color 0.12s;
+}
+.nav-pill:hover { background: var(--accent-dim); color: var(--accent); }
+.nav-pill.active { background: var(--accent); color: #fff; cursor: default; }
+.nav-pill.active:hover { background: var(--accent); color: #fff; }
+.nav-pill svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* ── Path breadcrumb (mast.jsp) ── */
+.dir-path {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 24px;
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    flex-wrap: wrap;
+}
+.dir-path a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.dir-path a:hover { text-decoration: underline; }
+.dir-path .path-sep { color: var(--border); flex-shrink: 0; }
+.dir-path .path-current { color: var(--fg); font-weight: 500; white-space: nowrap; }
+
+
+/* ── Container (mast.jsp opens, foot.jspf closes) ── */
+main.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+/* ── Responsive — Tablet / Mobile ── */
+@media (max-width: 768px) {
+    .compact-nav { padding: 8px 16px; }
+    main.container { padding: 16px; }
+}
+@media (max-width: 600px) {
+    .nav-label, .dir-label, .search-label { display: none; }
+    .header { padding: 8px 12px; }
+    .header-title { font-size: 14px; }
+    .header-link { display: none; }
+    .compact-nav { padding: 6px 12px; gap: 6px; flex-wrap: nowrap; }
+    .compact-nav-left { gap: 2px; flex-shrink: 0; flex-wrap: nowrap; }
+    .nav-pill { padding: 6px; border-radius: 6px; gap: 0; }
+    .nav-pill svg { width: 16px; height: 16px; }
+    .compact-nav-right { gap: 6px; flex-shrink: 0; min-width: 0; }
+    .search-form { gap: 6px; min-width: 0; }
+    .search-group { flex: 1; min-width: 0; }
+    .search-group .search-input { width: 70px; min-width: 0; font-size: 12px; }
+    .search-group .search-btn { padding: 0 8px; gap: 0; }
+    .search-btn-icon { display: block; width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .current-dir-label { font-size: 0; padding: 5px; gap: 0; height: auto; }
+    .current-dir-label input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
+    .dir-path { padding: 5px 12px; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-wrap: nowrap; }
+}
+@media (max-width: 380px) {
+    .search-group .search-input-wrap { display: none; }
+    .search-group .search-btn {
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        padding: 6px;
+    }
+    .search-btn-icon { width: 16px; height: 16px; stroke: var(--fg); }
+    .current-dir-label { padding: 4px; }
+    .current-dir-label input[type="checkbox"] { width: 18px; height: 18px; }
+}
+</style>
+</head>
+<%
 }
 /* ---------------------- httpheader.jsp end --------------------- */
 %>

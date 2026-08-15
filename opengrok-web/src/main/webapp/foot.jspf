@@ -16,58 +16,95 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2007, 2021, Oracle and/or its affiliates. All rights reserved.
-
+Copyright (c) 2007, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright 2011 Jens Elkner.
---%><%@page import="
-java.util.Date,
-java.util.EnumSet,
+Portions Copyright (c) 2026, UI Refactor.
+--%>
 
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page import="
+java.util.Date, 
 org.opengrok.indexer.Info,
 org.opengrok.web.PageConfig,
-org.opengrok.indexer.web.Prefix"
-%>
-<%!
-/* ---------------------- foot.jspf members start --------------------- */
-    private static final EnumSet<Prefix> needAddDiv = EnumSet.of(
-        Prefix.HIST_L, Prefix.XREF_P, Prefix.DIFF_P, Prefix.MORE_P,
-        // could NOT find any mapping/reference to those ones:
-        Prefix.HIST_S, Prefix.XREF_S, Prefix.DIFF_S, Prefix.MORE_S);
-/* ---------------------- foot.jspf members end --------------------- */
-%><%
-/* ---------------------- foot.jspf start --------------------- */
-{
-    PageConfig cfg = PageConfig.get(request);
-    Date dateForLastIndexRun = cfg.getEnv().getDateForLastIndexRun();
+java.text.SimpleDateFormat,
+java.util.Locale"%>
 
-        %>
-    <footer id="footer">
-<p><a href="https://oracle.github.io/opengrok/" class="link-no-decoration"
-      title="Served by OpenGrok (<%= Info.getVersion() %> - <%= Info.getShortRevision() %>)">
-    <span id="served-by">served&nbsp;by&nbsp;</span><span class="logo logo-gray-color">{</span><span class="logo logo-blue-color">Open</span><span class="logo logo-gray-color">Grok</span>
-</a></p>
-<% if(dateForLastIndexRun != null) { %>
-<p>Last Index Update: <%= dateForLastIndexRun %></p>
-<%}%>
-    <%= cfg.getEnv().getIncludeFiles().getFooterIncludeFileContent(false) %>
-    <%
-    if (needAddDiv.contains(cfg.getPrefix())) {
-        %></div><% // #content
-    }
-    // #footer, #page:
-    %>
-    </footer>
-</div>
+<style>
+:root {
+	--muted: #57606a;
+	--accent: #0969da;
+}
+
+/* 为页脚区域（common-page-footer）设置样式 */
+.common-page-footer {
+	text-align: center;
+	font-size: 12px;
+	color: var(--muted);
+	padding: 16px 0 24px;
+	text-decoration: none;
+}
+
+.common-page-footer a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+.common-page-footer a: hover {
+	text-decoration: underline;
+}
+
+@media(max-width: 600px) {
+	.common-page-footer {
+		font-size: 11px;
+		padding: 12px 0 20px;
+	}
+}
+</style>
+
+<%-- foot.jspf start
+
+  Page footer fragment.
+
+  Renders one self-contained <div class="common-page-footer">…</div>
+  block plus the project's custom footer-include content. No half-tags:
+  every opening tag here is closed in this same file.
+
+  (Closing </body> and </html> remain the calling page's responsibility,
+  but those are document-level tags opened at the very top by
+  httpheader.jspf — not chrome tags — and follow the same pattern as
+  PageConfig.getScripts() the caller emits after this include.)
+
+  The legacy div#content close-out and div#footer chrome are
+  replaced by the new common-page-footer (centered, muted, Chinese footer text).
+
+  cfg and dateForLastIndexRun are intentionally prefixed _foot_ so the
+  calling JSP body block (which also declares cfg / dateForLastIndexRun
+  in some pages) does not collide.
+--%>
 <%
-    /**
-     * Print out all collected javascript files (or inline script) by the calls
-     * to {@link PageConfig#addScript} methods.
-     */
+{
+	PageConfig _footCfg = PageConfig.get(request);
+	Date _footDate = _footCfg.getEnv().getDateForLastIndexRun();
 %>
-    <%= PageConfig.get(request).getScripts() %>
-</body>
-</html>
+<div class="common-page-footer">
+	&#x7531; <a href="https://oracle.github.io/opengrok/">OpenGrok</a>
+	&#x6258;&#x7ba1;
+	<%
+	if (_footDate != null) {
+		SimpleDateFormat lastIdxFmt = new SimpleDateFormat("yyyy \u5e74 M \u6708 d \u65e5 HH:mm zzz", Locale.US);
+		String lastIdxText = lastIdxFmt.format(_footDate);
+	%>
+	&nbsp;&middot;&nbsp;
+	&#x6700;&#x540e;&#x7d22;&#x5f15;&#x66f4;&#x65b0;&#xff1a;<%=lastIdxText%>
+	<%
+	}
+	%>
+	&nbsp;&middot;&nbsp;
+	<%=Info.getVersion()%>
+	(<%=Info.getShortRevision()%>)
+</div>
+<%=_footCfg.getEnv().getIncludeFiles().getFooterIncludeFileContent(false)%>
 <%
 }
-/* ---------------------- foot.jspf end --------------------- */
+/* foot.jspf end */
 %>

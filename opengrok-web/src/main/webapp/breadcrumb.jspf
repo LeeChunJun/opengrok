@@ -1,0 +1,174 @@
+<%--
+CDDL HEADER START
+
+The contents of this file are subject to the terms of the
+Common Development and Distribution License (the "License").
+You may not use this file except in compliance with the License.
+
+See LICENSE.txt included in this distribution for the specific
+language governing permissions and limitations under the License.
+
+When distributing Covered Code, include this CDDL HEADER in each
+file and include the License file at LICENSE.txt.
+If applicable, add the following below this CDDL HEADER, with the
+fields enclosed by brackets "[]" replaced with your own identifying
+information: Portions Copyright [yyyy] [name of copyright owner]
+
+CDDL HEADER END
+
+Copyright (c) 2007, 2026, Oracle and/or its affiliates. All rights reserved.
+Portions Copyright 2011 Jens Elkner.
+Portions Copyright (c) 2026, UI Refactor.
+--%>
+
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page import="
+org.opengrok.web.PageConfig,
+org.opengrok.indexer.web.Prefix,
+org.opengrok.indexer.web.Util,
+org.opengrok.indexer.configuration.Project"%>
+
+<style>
+:root {
+  --surface:   #ffffff;
+  --border:    #d0d7de;
+  --muted:     #57606a;
+  --accent:    #0969da;
+  --fg:        #24292f;
+  --bg:        #f6f8fa;
+}
+
+.dir-path {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 24px;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dir-path a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.dir-path a:hover {
+  text-decoration: underline;
+}
+
+.dir-path .path-sep {
+  color: var(--border);
+}
+
+.dir-path .path-current {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+@media(max-width: 600px) {
+    .dir-path {
+        padding: 5px 12px;
+        font-size: 11.5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+</style>
+
+<%-- breadcrumb.jspf start
+
+  Renders the page-top directory breadcrumb as one self-contained
+  <nav class="dir-path">…</nav> element. Extracted from pageheader.jspf
+  so the chrome can be split into independent, fully-matched fragments.
+
+  Inputs (set by the calling page, typically before pageheader.jspf
+  or before this include):
+    pageContext attributes:
+      _chromeCtxPath    (String, optional)  default: request.getContextPath()
+      _chromeProject    (Project, optional) default: cfg.getProject()
+      _chromePath       (String, optional)  default: cfg.getPath()
+      _chromeRevision       (String, optional) override revision value
+      _chromeRevisionTitle  (String, optional) override revision tooltip
+      _chromeRevisionShort  (String, optional) override revision short label
+      _chromeShowRevision   (Boolean, optional) FALSE hides the revision tag
+
+  Falls back to PageConfig.get(request) for everything missing — that
+  way this fragment can be included standalone (after pageheader.jspf
+  has populated the attributes via mast.jsp) or with no preceding
+  fragment at all.
+--%>
+<%
+    PageConfig _chromeBcCfg = PageConfig.get(request);
+
+    String _chromeBcCtxPath = (String) pageContext.getAttribute("_chromeCtxPath");
+    if (_chromeBcCtxPath == null) _chromeBcCtxPath = request.getContextPath();
+
+    Project _chromeBcProj = (Project) pageContext.getAttribute("_chromeProject");
+    if (_chromeBcProj == null) {
+        Object _bcProjRaw = _chromeBcCfg.getProject();
+        if (_bcProjRaw instanceof Project) {
+            _chromeBcProj = (Project) _bcProjRaw;
+        }
+    }
+
+    String _chromeBcPath = (String) pageContext.getAttribute("_chromePath");
+    if (_chromeBcPath == null) _chromeBcPath = _chromeBcCfg.getPath();
+
+    /* Compute breadcrumb segments. */
+    String _bcSubPath = _chromeBcPath;
+    if (_chromeBcProj != null) {
+        String _prefix = "/" + _chromeBcProj.getName();
+        if (_bcSubPath.startsWith(_prefix)) {
+            _bcSubPath = _bcSubPath.substring(_prefix.length());
+        }
+    }
+    if (_bcSubPath.startsWith("/")) _bcSubPath = _bcSubPath.substring(1);
+    while (_bcSubPath.endsWith("/")) _bcSubPath = _bcSubPath.substring(0, _bcSubPath.length() - 1);
+
+    /* Compute revision (if requested). */
+    String _chromeRevOverride = (String) pageContext.getAttribute("_chromeRevision");
+    String _chromeRev = _chromeRevOverride != null ? _chromeRevOverride : _chromeBcCfg.getRequestedRevision();
+    boolean _chromeRevVisible = _chromeRev != null && !_chromeRev.isEmpty()
+            && !Boolean.FALSE.equals(pageContext.getAttribute("_chromeShowRevision"));
+    String _chromeRevLabel = "revision:";
+
+    /* Title (tooltip) — full revision. Override via _chromeRevisionTitle if set. */
+    String _chromeRevTitleAttr = (String) pageContext.getAttribute("_chromeRevisionTitle");
+    if (_chromeRevTitleAttr == null) _chromeRevTitleAttr = _chromeRev;
+
+    /* Short revision for display. Override via _chromeRevisionShort if set. */
+    String _chromeRevShort = (String) pageContext.getAttribute("_chromeRevisionShort");
+    if (_chromeRevShort == null) _chromeRevShort = _chromeRev.length() > 7 ? _chromeRev.substring(0, 7) : _chromeRev;
+%>
+<nav class="dir-path">
+    <a href="<%= _chromeBcCtxPath %>/">Home</a>
+
+    <% if (_chromeBcProj != null) { %>
+    <span class="path-sep">/</span>
+    <a href="<%= _chromeBcCtxPath %><%= Prefix.XREF_P %>/<%= Util.uriEncodePath(_chromeBcProj.getName()) %>"><%= Util.htmlize(_chromeBcProj.getName()) %></a>
+    <% } %>
+
+    <% if (!_bcSubPath.isEmpty()) { %>
+    <span class="path-sep">/</span>
+    <%
+        String[] _bcSegs = _bcSubPath.split("/");
+        String _prefixRoot = "/" + (_chromeBcProj != null ? Util.uriEncodePath(_chromeBcProj.getName()) : "");
+        StringBuilder _bcBuilder = new StringBuilder(_prefixRoot);
+        for (int _si = 0; _si < _bcSegs.length; _si++) {
+            if (_bcSegs[_si].isEmpty()) continue;
+            _bcBuilder.append("/").append(_bcSegs[_si]);
+            if (_si == _bcSegs.length - 1) { %>
+    <span class="path-current"><%= Util.htmlize(_bcSegs[_si]) %></span>
+            <% } else { %>
+    <a href="<%= _chromeBcCtxPath %><%= Prefix.XREF_P %><%= Util.uriEncodePath(_bcBuilder.toString()) %>/"><%= Util.htmlize(_bcSegs[_si]) %></a>
+    <span class="path-sep">/</span>
+            <% } %>
+    <%  } %>
+   <% } %>
+    <% if (_chromeRevVisible) { %>
+    <span class="revision" title="<%= Util.htmlize(_chromeRevTitleAttr) %>"><%= Util.htmlize(_chromeRevLabel) %> <span><%= Util.htmlize(_chromeRevShort) %></span></span>
+    <% } %>
+</nav>

@@ -16,21 +16,201 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2007, 2022, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2007, 2026, Oracle and/or its affiliates. All rights reserved.
+Portions Copyright 2011 Jens Elkner.
+Portions Copyright (c) 2026, UI Refactor.
+--%>
 
---%><%@page import="org.opengrok.web.PageConfig"%>
-<%
-/* ---------------------- pageheader.jspf start --------------------- */
-{
-    PageConfig cfg = PageConfig.get(request);
-    String headerContent = cfg.getEnv().getIncludeFiles().getHeaderIncludeFileContent(false);
-    if (headerContent != null && !headerContent.isBlank()) {
-        %>
-<div id="header">
-    <%= headerContent %>
-</div>
-        <%
-    }
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page import="
+org.opengrok.indexer.web.Prefix,
+org.opengrok.indexer.web.Util,
+org.opengrok.indexer.configuration.Project,
+org.opengrok.web.PageConfig" %>
+
+<style>
+:root {
+  --surface:   #ffffff;
+  --border:    #d0d7de;
+  --fg:        #24292f;
+  --muted:     #57606a;
+  --accent:    #0969da;
 }
-/* ---------------------- pageheader.jspf end --------------------- */
+
+/* 为页首区域（common-page-header）设置样式 */
+.common-page-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.common-page-header-logo {
+  width: 28px;
+  height: 28px;
+  background: var(--fg);
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.common-page-header-logo svg {
+  width: 14px;
+  height: 14px;
+  stroke: #60a5fa; fill: none; stroke-width: 2.5;
+}
+
+.common-page-header-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.common-page-header-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.common-page-header-title a:hover {
+  color: var(--accent);
+}
+
+.common-page-header-title span {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+@media(max-width: 900px) {
+  .common-page-header {
+    padding: 10px 16px;
+  }
+}
+
+@media(max-width: 600px) {
+  .common-page-header {
+    padding: 8px 12px;
+  }
+  .common-page-header-title {
+    font-size: 14px;
+  }
+}
+</style>
+
+<%-- pageheader.jspf start
+
+  Page header fragment.
+
+  Single include point that pages use to get the chrome. Pages do:
+
+      <% pageContext.setAttribute("_chromeShowFullChrome", Boolean.TRUE); %>
+      <%@ include file="pageheader.jspf" %>
+      <main class="container">
+          ... page body ...
+      </main>
+      <%@ include file="foot.jspf" %>
+
+  Or, for logo-only mode (no compact-nav / breadcrumb):
+
+      <%@ include file="pageheader.jspf" %>
+      <main class="container">
+          ... page body ...
+      </main>
+      <%@ include file="foot.jspf" %>
+
+  Every chrome fragment is self-contained (own matched open/close tags);
+  pageheader.jspf never opens a tag it does not close in the same file.
+
+  Composition order:
+    1. chrome-guards.jspf  — early-exit (403 / redirect / 304) via `return`
+                              from the calling JSP's _jspService. Must run
+                              before any HTML output.
+    2. httpheader.jspf      — shared <head> (meta, stylesheets, scripts).
+    3. Logo header         — <header class="common-page-header">…</header>
+    4. (full chrome only) mast.jsp         — compact-nav block only
+                              (no early-exit, no <main>).
+    5. (full chrome only) breadcrumb.jspf  — <nav class="dir-path">…</nav>
+                              with optional revision tag.
+    The calling page is responsible for its own <main>…</main> pair.
+
+  Chrome mode is auto-detected from PageConfig.getProject() (request-bound,
+  available immediately, independent of include order). If a project is
+  selected, full chrome is rendered; otherwise only the logo header is
+  rendered.
+
+  Two chrome pieces are rendered in full chrome mode:
+    1. compact-nav (Home/History pills + search + current directory) —
+       delegated to mast.jsp (which internally includes minisearch.jspf)
+    2. breadcrumb (Home / project / subpath) with optional revision tag —
+       delegated to breadcrumb.jspf
+
+  Optional flags the calling page may set BEFORE the include:
+
+    _chromeShowFullChrome   (Boolean)  force full chrome on/off
+    _chromeShowRevision     (Boolean)  show/hide the revision tag in breadcrumb
+    _chromeRevision         (String)   override the revision value
+                                       (default: cfg.getRequestedRevision())
+    _chromeRevisionTitle    (String)   override the revision tooltip text
+    _chromeRevisionShort    (String)   override the revision short label
+    activeNav               (String)   "home" / "history" — active nav-pill
+
+  Variables exposed by mast.jsp (auto-set, available to breadcrumb.jspf
+  via pageContext.getAttribute — not used for chrome-mode detection):
+
+    _chromeCtxPath          (String)   (default: request.getContextPath())
+    _chromeProject          (Project)
+    _chromePath             (String)
+
+--%>
+<%
+    /* Step 1: early-exit guards. Must run BEFORE any HTML output so the
+     * `return` statement inside chrome-guards.jspf exits the calling
+     * page's _jspService without emitting dangling tags. */
+%>
+<%@ include file="chrome-guards.jspf" %>
+<%
+    /* Step 2: determine chrome mode.
+     *
+     * IMPORTANT: do NOT read `_chromeProject` from pageContext here. That
+     * attribute is set by mast.jsp, which is included below inside the
+     * `_chromeShowFullChrome` branch — so reading it here would
+     * always return null and short-circuit chrome rendering on every page.
+     *
+     * Source the project from PageConfig (request-bound, available
+     * immediately) so the auto-detection works regardless of include order.
+     */
+    PageConfig _chromeHeadCfg = PageConfig.get(request);
+    Object _proj = _chromeHeadCfg.getProject();
+    boolean _chromeShowFullChrome =
+            Boolean.TRUE.equals(pageContext.getAttribute("_chromeShowFullChrome"))
+            || (_proj instanceof Project && ((Project) _proj).getName() != null);
+%>
+<%-- Shared <head>: meta, stylesheet links, theme-color, scripts. --%>
+<%@ include file="httpheader.jspf" %>
+<body>
+<%-- ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒ Logo header (always shown) ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒ --%>
+<header class="common-page-header">
+    <div class="common-page-header-logo">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+     </div>
+    <div class="common-page-header-title">OpenGrok <span>Code Search</span></div>
+</header>
+
+<%
+    if (_chromeShowFullChrome) {
+        /* compact-nav: delegated to mast.jsp (single self-contained
+           <div class="compact-nav">…</div>; no <main>, no guards). */
+%>
+<%@ include file="mast.jsp" %>
+<%
+        /* Breadcrumb: delegated to breadcrumb.jspf (single self-contained
+           <nav class="dir-path">…</nav>). */
+%>
+<%@ include file="breadcrumb.jspf" %>
+<%
+    }
+    /* logo-only mode: nothing more to render; the calling page is now
+     * responsible for its own <main>…</main> pair. */
 %>
