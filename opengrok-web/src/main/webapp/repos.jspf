@@ -16,181 +16,435 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2015, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright (c) 2019, Krystof Tulinger <k.tulinger@seznam.cz>.
+Portions Copyright (c) 2026, UI Refactor.
 --%>
-<%@ taglib tagdir="/WEB-INF/tags" prefix="opengrok" %>
+
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
-<%@page import="java.util.Iterator"%>
-<%@page import="java.util.LinkedList"%>
-<%@page import="java.util.Set"%>
-<%@page import="java.util.TreeSet"%>
-<%@page import="org.opengrok.indexer.configuration.Group"%>
-<%@page import="org.opengrok.indexer.configuration.Project"%>
-<%@page import="org.opengrok.web.PageConfig"%>
-<%@page import="org.opengrok.web.ProjectHelper"%>
-<%@ page import="static org.opengrok.indexer.web.messages.MessagesUtils.printMessages" %>
-<%@ page import="static org.opengrok.indexer.web.messages.MessagesUtils.messagesToJson" %>
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page import="
+java.io.IOException,
+org.opengrok.indexer.configuration.Group,
+org.opengrok.indexer.configuration.Project,
+org.opengrok.indexer.history.RepositoryInfo,
+org.opengrok.indexer.web.Prefix,
+org.opengrok.indexer.web.Util,
+org.opengrok.web.PageConfig,
+org.opengrok.web.ProjectHelper"%>
+
+<%!
+/* ---------------------- helper: render one repository card --------------------- */
+private static String repoTypeBadgeClass(String repoType) {
+    if (repoType == null) return "badge-default";
+    String lt = repoType.toLowerCase();
+    if (lt.contains("git"))                                    return "badge-git";
+    if (lt.contains("svn") || lt.contains("subversion"))      return "badge-svn";
+    if (lt.contains("hg")  || lt.contains("mercurial"))       return "badge-hg";
+    if (lt.contains("cvs"))                                    return "badge-cvs";
+    return "badge-default";
+}
+
+private static boolean hasText(String s) {
+    return s != null && !s.isEmpty();
+}
+
+private static String nz(String s) {
+    return s == null ? "" : s;
+}
+
+private static String extractVersionDateTime(String s) {
+    if (s == null || s.length() < 16) return null;
+    if (   s.charAt(4)  == '-' && s.charAt(7)  == '-'
+        && s.charAt(10) == ' ' && s.charAt(13) == ':') {
+        return s.substring(0, 16);
+    }
+    return null;
+}
+
+private static String extractShortHash(String s) {
+    if (s == null) return null;
+    String[] tokens = s.trim().split("\\s+");
+    if (tokens.length < 4) return null;
+    String candidate = tokens[3];
+    if (candidate.matches("[0-9a-fA-F]{4,40}") || candidate.matches("\\d{1,20}")) {
+        return candidate;
+    }
+    return null;
+}
+
+private void renderRepoCard(JspWriter out, PageConfig cfg, String ctxPath,
+                            ProjectHelper ph, Project p) throws IOException {
+    if (!p.isIndexed() || !cfg.isAllowed(p)) return;
+
+    String name = p.getName();
+    String repoUrl = ctxPath + Prefix.XREF_P + "/" + Util.uriEncodePath(name);
+
+    RepositoryInfo ri = null;
+    for (RepositoryInfo info : ph.getSortedRepositoryInfo(p)) {
+        ri = info;
+        break;
+    }
+
+    String repoType     = (ri == null) ? null : ri.getType();
+    String remoteUrl    = (ri == null) ? null : ri.getParent();
+    String branch       = (ri == null) ? null : ri.getBranch();
+    String currentVer   = (ri == null) ? null : ri.getCurrentVersion();
+
+    boolean hasRepoType = hasText(repoType);
+    boolean hasUrl      = hasText(remoteUrl);
+    boolean hasBranch   = hasText(branch);
+    String versionDate  = extractVersionDateTime(currentVer);
+    String versionHash  = extractShortHash(currentVer);
+
+    String badgeClass = repoTypeBadgeClass(repoType);
+
+    String hName        = Util.htmlize(name);
+    String hType        = Util.htmlize(nz(repoType));
+    String hUrl         = Util.htmlize(nz(remoteUrl));
+    String hBranch      = Util.htmlize(nz(branch));
+    String hVersionDate = Util.htmlize(nz(versionDate));
+    String hVersionHash = Util.htmlize(nz(versionHash));
+
+    String slot4Icon = hasRepoType
+            ? "<svg viewBox=\"0 0 24 24\"><line x1=\"6\" y1=\"3\" x2=\"6\" y2=\"15\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M18 9a9 9 0 0 1-9 9\"/></svg>"
+            : "<svg viewBox=\"0 0 24 24\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/></svg>";
+    String slot4Label = hasRepoType ? "\u4ed3\u5e93" : "\u5de5\u7a0b";
+    String branchLine;
+    String slot6Cls   = "";
+    if (hasBranch && hasText(hVersionHash)) {
+        branchLine = hBranch + " &middot; " + hVersionHash;
+    } else if (hasBranch) {
+        branchLine = hBranch;
+    } else if (hasText(hVersionHash)) {
+        branchLine = hVersionHash;
+    } else {
+        branchLine = "\u6682\u65e0\u5206\u652f";
+        slot6Cls   = " placeholder";
+    }
+    String slot2Cls = hasUrl ? "" : " empty";
+    String slot3Cls = hasRepoType ? "" : " empty";
+    /* Meta slot: always render the type ("仓库" / "工程") and the version-date
+       icons; if either value is missing, fall back to a neutral placeholder
+       (no longer hide the whole row). */
+    String slot5Cls = hasText(hVersionDate) ? "" : " empty";
+    String slot5Text = hasText(hVersionDate) ? hVersionDate : "\u2014\u2014";
+    String slot5Title = hasText(hVersionDate) ? hVersionDate : "\u6682\u65e0\u65f6\u95f4";
+
+    out.println("<div class=\"repo-card\" data-od-id=\"repo-" + hName + "\">");
+    out.println("  <div class=\"repo-card-header\">");
+    out.println("    <a href=\"" + repoUrl + "\" class=\"repo-card-name\">" + hName + "</a>");
+    out.println("    <span class=\"repo-card-badge " + badgeClass + slot3Cls + "\">" + hType + "</span>");
+    out.println("  </div>");
+
+    /* URL slot: when a remote HTTP(S) URL is known, link to the remote
+       (e.g. GitHub); otherwise fall back to the OpenGrok xref link for
+       the same card. We still use the htmlized form for the visible
+       text/title so any special chars in the URL are XSS-safe. */
+    boolean hasHttpUrl = hasUrl && Util.isHttpUri(remoteUrl);
+    String urlHref = hasHttpUrl ? hUrl : repoUrl;
+    String urlTarget = hasHttpUrl ? " target=\"_blank\" rel=\"noopener noreferrer\"" : "";
+    out.println("  <a href=\"" + urlHref + "\" class=\"repo-card-url" + slot2Cls + "\""
+        + urlTarget + " title=\"" + hUrl + "\">" + hUrl + "</a>");
+
+    out.println("  <div class=\"repo-card-meta\">");
+    out.println("    <span class=\"meta-item\">" + slot4Icon + "<span class=\"meta-text\">" + slot4Label + "</span></span>");
+    out.println("    <span class=\"meta-item " + slot5Cls + "\" title=\"" + slot5Title + "\">"
+        + "<svg viewBox=\"0 0 24 24\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/></svg>"
+        + "<span class=\"meta-text\">" + slot5Text + "</span></span>");
+    out.println("  </div>");
+
+    out.println("  <div class=\"repo-card-footer\">");
+    out.println("    <span class=\"repo-card-branch" + slot6Cls + "\"><span class=\"branch-text\">" + branchLine + "</span></span>");
+    out.println("    <a href=\"" + repoUrl + "\" class=\"repo-card-link\">\u6d4f\u89c8 &rarr;</a>");
+    out.println("  </div>");
+    out.println("</div>");
+}
+%>
+
+<style>
+:root {
+    --bg:        #f6f8fa;
+    --surface:   #ffffff;
+    --fg:        #24292f;
+    --muted:     #57606a;
+    --border:    #d0d7de;
+    --border-light: #eaeef2;
+    --accent:    #0969da;
+    --accent-dim: rgba(9,105,218,0.08);
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* ── repo-section / repo-grid / repo-card styles ── */
+.repo-section-title {
+	font-size: 13px;
+	font-weight: 600;
+	margin-bottom: 14px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.repo-section-title .count {
+	font-weight: 400;
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.repo-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 12px;
+	margin-bottom: 36px;
+}
+
+.repo-card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 16px;
+	transition: border-color 0.12s, box-shadow 0.12s, transform 0.1s;
+	color: inherit;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.repo-card:hover {
+	border-color: #c7c9d0;
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+	transform: translateY(-1px);
+}
+
+.repo-card .repo-card-name,
+.repo-card .repo-card-url,
+.repo-card .repo-card-link {
+	text-decoration: none;
+}
+
+.repo-card .repo-card-name {
+	color: var(--fg);
+}
+
+.repo-card .repo-card-name:hover {
+	color: var(--accent);
+}
+
+.repo-card-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+}
+
+.repo-card-name {
+	font-size: 15px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	color: var(--fg);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+.repo-card-badge {
+	font-size: 11px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-weight: 500;
+	flex-shrink: 0;
+}
+
+.repo-card-badge.empty {
+	visibility: hidden;
+	min-width: 0;
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.badge-git {
+	background: #f0f1ff;
+	color: #5b6abf;
+}
+
+.badge-svn {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.badge-hg {
+	background: #fce7f3;
+	color: #9d174d;
+}
+
+.badge-cvs {
+	background: #dbeafe;
+	color: #1e40af;
+}
+
+.badge-mercurial {
+	background: #fce7f3;
+	color: #9d174d;
+}
+
+.badge-subversion {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.badge-default {
+	background: #e5e7eb;
+	color: #374151;
+}
+
+.repo-card-url {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	color: var(--muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.repo-card-url.empty {
+	visibility: hidden;
+	min-width: 0;
+}
+
+.repo-card-meta {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 12px;
+	color: var(--muted);
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.repo-card-meta .meta-item {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	max-width: 100%;
+	flex: 0 1 auto;
+}
+
+.repo-card-meta .meta-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.repo-card-meta .meta-item.empty {
+	visibility: hidden;
+}
+
+.repo-card-meta svg {
+	width: 13px;
+	height: 13px;
+	stroke: currentColor;
+	fill: none;
+	stroke-width: 2;
+	flex-shrink: 0;
+}
+
+.repo-card-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-top: 10px;
+	border-top: 1px solid var(--border);
+	gap: 8px;
+	min-width: 0;
+}
+
+.repo-card-branch {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	color: var(--muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.repo-card-branch .branch-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	display: inline-block;
+	max-width: 100%;
+}
+
+.repo-card-branch.placeholder {
+	color: var(--muted);
+	font-style: italic;
+}
+
+.repo-card-link {
+	font-size: 12px;
+	color: var(--accent);
+	text-decoration: none;
+	font-weight: 500;
+	flex-shrink: 0;
+}
+
+.repo-card-link:hover {
+	text-decoration: underline;
+}
+</style>
+
 <%
+/* ---------------------- repos.jspf body ----------------------
+ *
+ * Renders the inline repo grid (the section previously inlined at
+ * index.jsp). Variables are prefixed `_repos_`
+ * so the calling JSP's body block does not collide.
+ */
 {
-    PageConfig cfg = PageConfig.get(request);
-    pageContext.setAttribute("pageConfig", cfg);
-    cfg.addScript("repos");
-    String messages;
+    PageConfig _reposCfg = PageConfig.get(request);
+    ProjectHelper _reposPh = _reposCfg.getProjectHelper();
+    String _reposCtx = request.getContextPath();
+    boolean _reposDisplayRepos = _reposCfg.getEnv().isDisplayRepositories();
+    int _reposCount = 0;
+    if (_reposPh != null && _reposPh.getAllProjects() != null) {
+        _reposCount = _reposPh.getAllProjects().size();
+    }
 
-    printMessages(out, cfg.getMessages());
-    
-    ProjectHelper pHelper = cfg.getProjectHelper();
-    if (pHelper.getAllProjects().size() > 0) {
-        Set<Group> groups = pHelper.getGroups();
-        if (groups.size() > 0) {
-            // recursively print all groups
-            %>
-
-            <div class="panel-group projects">
-                <div class="toggle-buttons">
-                    <a href="#" class="accordion_show_all">
-                        <button>Show all</button>
-                    </a>
-                    <a href="#" class="accordion_hide_all">
-                        <button>Hide all</button>
-                    </a>
-                </div>
-            <%
-            LinkedList<Group> stack = new LinkedList<>();
-            for ( Group x : groups ) {
-                if (x.getParent() == null && (pHelper.hasAllowedSubgroup(x) || cfg.isAllowed(x))) {
-                    // the flag here represents the state of the group - open/close
-                    x.setFlag(0);
-                    stack.addLast(x);
-                }
-            }
-
-            while (!stack.isEmpty()) {
-                Group group = stack.element();
-
-                if (group.getFlag() > 0) {
-                    // already processed
-                    stack.pollFirst();
-                    %></div><!-- body -->
-                    </div><!-- panel --><%
-                    continue;
-                }
-
-                stack.element().setFlag(1);
-
-                Set<Group> subgroups = new TreeSet<>(pHelper.getSubgroups(group));
-                for (Iterator<Group> it = subgroups.iterator(); it.hasNext();) {
-                    Group x = it.next();
-                    if (cfg.isAllowed(x) || pHelper.hasAllowedSubgroup(x)) {
-                        x.setFlag(0);
-                    } else {
-                        it.remove();
-                    }
-                }
-                // add all the subgroups to the beginning respecting the order
-                stack.addAll(0, subgroups);
-
-                %><div class="panel">
-                    <div class="panel-heading-accordion">
-                        
-                        <h4 class="clearfix">
-                            <span class="pull-left">
-                                <span class="name"><%= Util.htmlize(group.getName())%></span>
-                                <%
-                                if (!(messages = MessagesUtils.messagesToJson(group)).isEmpty()) { %>
-                                    <span class="note-<%= MessagesUtils.getMessageLevel(group.getName()) %> important-note important-note-rounded" data-messages='<%= messages %>'>!</span>
-                                <% } %>
-                                <small>
-                                    [<a href="#" class="projects_select_all">select all</a>]
-                                    (<span title="Number of groups directly in this group"><%= pHelper.getSubgroups(group).size() %></span> +
-                                        <span title="Number of projects directly in this group"><%= pHelper.getAllGrouped(group).size() %></span>)
-                                </small>
-                            </span>
-                            <span class="pull-right">
-                                <span class="fold <%= pHelper.hasFavourite(group) ? "fold-up" : "fold-down"%>"></span>
-                            </span>
-                        </h4>
-                    </div>
-                        <div class="panel-body-accordion<% if (pHelper.hasFavourite(group)) { %> favourite<% } %>"
-                         <% if (pHelper.hasFavourite(group)
-                            || (pHelper.getAllGrouped(group).size() > 0 && pHelper.getAllGrouped(group).size() <= cfg.getGroupsCollapseThreshold())) {
-                        %>data-accordion-visible="true"<% } %>>
-                <%
-                if (pHelper.getAllGrouped(group).size() > 0) {
-                %>
-                    <table aria-label="Table of grouped projects and repositories">
-                        <opengrok:repositories
-                                pageConfig="${pageConfig}"
-                                repositories="<%= pHelper.getRepositories(group) %>"
-                                />
-
-                        <opengrok:projects
-                                projects="<%= pHelper.getProjects(group) %>"
-                        />
-                    </table><%
-                } else if ( pHelper.getAllGrouped(group).size() <= 0 && !pHelper.hasAllowedSubgroup(group) ) {
-                    %>No projects<%
-                }
-            }
-            %></div><%
+    if (_reposDisplayRepos && _reposCount > 0) {
+%>
+<section id="repo-section">
+    <div class="repo-section-title">
+        仓库列表 <span class="count"><%= _reposCount %> 个仓库</span>
+    </div>
+    <div class="repo-grid">
+        <%
+        for (Group _reposG : _reposPh.getGroups()) {
+            if (!(_reposCfg.isAllowed(_reposG) || _reposPh.hasAllowedSubgroup(_reposG)))
+                continue;
+            for (Project _reposP : _reposPh.getProjects(_reposG))
+                renderRepoCard(out, _reposCfg, _reposCtx, _reposPh, _reposP);
+            for (Project _reposP : _reposPh.getRepositories(_reposG))
+                renderRepoCard(out, _reposCfg, _reposCtx, _reposPh, _reposP);
         }
-
-        // print the rest of projects which don't have a group
-        Set<Project> projects = pHelper.getAllUngrouped();
-        if (projects.size() > 0) { %>
-            <div class="panel-group projects">
-                <% if (groups.size() > 0) { %>
-                    <div class="toggle-buttons">
-                        <a href="#" class="accordion_show_all">
-                            <button>Show all</button>
-                        </a>
-                        <a href="#" class="accordion_hide_all">
-                            <button>Hide all</button>
-                        </a>
-                    </div>
-                <% } %>
-                <div class="panel">
-                    <% if (groups.size() > 0) {%>
-                        <div class="panel-heading-accordion">
-                            <h4 class="clearfix">
-                                <span class="pull-left">
-                                    <span class="name">Other</span>
-                                    <%
-                                    if (!(messages = messagesToJson("other")).isEmpty()) { %>
-                                        <span class="note-<%= MessagesUtils.getMessageLevel("other") %> important-note important-note-rounded" data-messages='<%= messages %>'>!</span>
-                                    <% } %>
-                                    <small>
-                                        [<a href="#" class="projects_select_all">select all</a>]
-                                        (<span title="Number of projects inside"><%= projects.size() %></span>)
-                                    </small>
-                                </span>
-                                <span class="pull-right">
-                                    <span class="fold <%= pHelper.hasUngroupedFavourite() ? "fold-up" : "fold-down"%>"></span>
-                                </span>
-                            </h4>
-                        </div>
-                    <% } %>
-                    <div class="panel-body<% if (groups.size() > 0) {%>-accordion<% } %> <% if (pHelper.hasUngroupedFavourite()) { %> favourite<% } %>"
-                         <% if (pHelper.hasUngroupedFavourite()
-                                || (projects.size() > 0 && projects.size() <= cfg.getGroupsCollapseThreshold())) {
-                        %>data-accordion-visible="true"<% } %>>
-                        <table aria-label="Table of ungrouped projects and repositories">
-                            <opengrok:repositories
-                                    pageConfig="${pageConfig}"
-                                    repositories="<%= pHelper.getUngroupedRepositories() %>"
-                            />
-
-                            <opengrok:projects
-                                    projects="<%= pHelper.getUngroupedProjects() %>"
-                            />
-                        </table>
-                    </div>
-                </div>
-            </div><%
-        }
+        for (Project _reposP : _reposPh.getUngroupedProjects())
+            renderRepoCard(out, _reposCfg, _reposCtx, _reposPh, _reposP);
+        for (Project _reposP : _reposPh.getUngroupedRepositories())
+            renderRepoCard(out, _reposCfg, _reposCtx, _reposPh, _reposP);
+        %>
+    </div>
+</section>
+<%
     }
 }
 %>
-<br/>
-<br/>
