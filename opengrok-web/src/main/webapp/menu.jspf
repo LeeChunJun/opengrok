@@ -16,16 +16,20 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2007, 2025, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2007, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright 2011 Jens Elkner.
 Portions Copyright (c) 2020, Chris Fraire <cfraire@me.com>.
-
+Portions Copyright (c) 2026, UI Refactor.
 --%>
+
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@page import="
 java.util.Map,
 java.util.Set,
 java.util.SortedSet,
 java.util.TreeSet,
+java.util.ArrayList,
+java.util.List,
 
 org.opengrok.indexer.configuration.Group,
 org.opengrok.indexer.configuration.Project,
@@ -35,201 +39,675 @@ org.opengrok.web.ProjectHelper,
 org.opengrok.indexer.web.QueryParameters,
 org.opengrok.indexer.web.SearchHelper,
 org.opengrok.indexer.web.Util,
-org.opengrok.indexer.web.messages.MessagesUtils"
-%>
+org.opengrok.indexer.web.messages.MessagesUtils"%>
+
 <%
-/* ---------------------- menu.jspf start --------------------- */
-{
-    PageConfig cfg = PageConfig.get(request);
-    ProjectHelper ph = ProjectHelper.getInstance(cfg);
-    String messages;
-    Set<Project> projects = ph.getAllProjects();
-    int projectsSize = ph.getAllUngrouped().size();
-    if (!ph.getGroups().isEmpty() && !ph.getAllUngrouped().isEmpty())
-        projectsSize++;
-    for (Group group : ph.getGroups()) {
-        projectsSize++;
-        projectsSize += ph.getAllGrouped(group).size();
+/* ---------------------- menu.jspf — setup (must run before <style>) ---
+ *
+ * Run BEFORE the <style> block below, because writing the style block
+ * flushes the response buffer and commits it. Once the response is
+ * committed, ProjectHelper.filterProjects() cannot ask the request for
+ * a session (AuthorizationFramework.checkAll → req.getSession() throws
+ * "Response is committed"). Resolving all data here, while the
+ * response is still buffered, keeps the isAllowed() calls safe.
+ *
+ * Variables are renamed with the `_menu_` prefix so the calling JSP's
+ * body block (which may declare its own `cfg`, `ph`, etc.) does not
+ * collide.
+ */
+PageConfig _menuCfg = PageConfig.get(request);
+ProjectHelper _menuPh = ProjectHelper.getInstance(_menuCfg);
+String _menuCtxPath = request.getContextPath();
+Set<Project> _menuProjects = _menuPh.getAllProjects();
+Set<String> _menuRequestedProjects = _menuCfg.getRequestedProjects();
+boolean _menuAnyRequested = !_menuRequestedProjects.isEmpty();
+Set<Map.Entry<String, String>> _menuTypeDescriptions = SearchHelper.getFileTypeDescriptions();
+QueryBuilder _menuQueryBuilder = _menuCfg.getQueryBuilder();
+String _menuSelectedType = (_menuQueryBuilder != null && _menuQueryBuilder.getType() != null)
+        ? _menuQueryBuilder.getType() : "";
+String _menuFreetext = _menuQueryBuilder == null ? "" : _menuQueryBuilder.getFreetext();
+String _menuDefs     = _menuQueryBuilder == null ? "" : _menuQueryBuilder.getDefs();
+String _menuRefs     = _menuQueryBuilder == null ? "" : _menuQueryBuilder.getRefs();
+String _menuPath     = _menuQueryBuilder == null ? "" : _menuQueryBuilder.getPath();
+String _menuHist     = _menuQueryBuilder == null ? "" : _menuQueryBuilder.getHist();
+
+/* Pre-compute the filtered project lists while the response is still
+ * buffered. Both the chips <div> and the hidden <select> below iterate
+ * the same set; the per-project authorization check (cfg.isAllowed)
+ * MUST happen before the response commits, or
+ * AuthorizationFramework.checkAll() will throw because the request
+ * session is no longer reachable. */
+List<Project> _menuAllowedProjects = new ArrayList<>();
+for (Project _menuP : _menuProjects) {
+    if (_menuP.isIndexed() && _menuCfg.isAllowed(_menuP)) {
+        _menuAllowedProjects.add(_menuP);
     }
-    QueryBuilder queryParams = cfg.getQueryBuilder();
+}
 %>
-<script type="text/javascript">/* <![CDATA[ */
-document.domReady.push(function() { domReadyMenu(); });
+
+<style>
+/* ── menu.jspf — new search-hero + project-chips styles ──
+ *
+ * Extracted from index.jsp so any page that includes this fragment
+ * renders an identical hero/chips block. The .menu-root wrapper keeps
+ * the rules from leaking into the surrounding chrome.
+ */
+.menu-root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --fg: #1a1b2e;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --accent: #3b82f6;
+    --accent-dim: rgba(59, 130, 246, 0.08);
+    --green: #22c55e;
+    --green-dim: rgba(34, 197, 94, 0.10);
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace,
+        Menlo, monospace;
+}
+
+.menu-root .search-hero {
+    margin-bottom: 28px;
+}
+
+/* Heading styles for the search page. They apply whether the h1/p
+ * are rendered as direct children of .menu-root .search-hero (legacy
+ * layout) or as standalone elements placed above the menu.jspf include
+ * by the calling page (current index.jsp layout — class
+ * `.search-hero-heading`). */
+.menu-root .search-hero h1,
+.search-hero-heading {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+}
+
+.menu-root .search-hero p,
+.search-hero-subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 20px;
+}
+
+.menu-root .primary-search {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.menu-root .primary-search input {
+    width: 100%;
+    height: 48px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 0 16px 0 44px;
+    font-size: 15px;
+    font-family: var(--font-sans);
+    color: var(--fg);
+    background: var(--surface);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.menu-root .primary-search input::placeholder {
+    color: #b0b4bc;
+}
+
+.menu-root .primary-search input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.menu-root .primary-search .ps-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    stroke: var(--muted);
+    fill: none;
+    stroke-width: 2;
+}
+
+.menu-root .primary-search .ps-kbd {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: var(--muted);
+    background: #f0f1f3;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-family: var(--font-sans);
+    pointer-events: none;
+}
+
+.menu-root .controls-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.menu-root .ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--fg);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+    font-family: var(--font-sans);
+}
+
+.menu-root .ctrl-btn:hover {
+    background: #f8f9fb;
+}
+
+.menu-root .ctrl-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.menu-root .ctrl-btn svg {
+    width: 13px;
+    height: 13px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+}
+
+.menu-root .ctrl-btn .arrow {
+    transition: transform 0.2s;
+}
+
+.menu-root .ctrl-btn.active .arrow {
+    transform: rotate(180deg);
+}
+
+.menu-root .ctrl-select {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    font-family: var(--font-sans);
+    color: var(--fg);
+    background: var(--surface);
+    outline: none;
+    cursor: pointer;
+    visibility: visible;
+    width: auto;
+    height: auto;
+    min-width: 120px;
+}
+
+.menu-root .ctrl-select:focus {
+    border-color: var(--accent);
+}
+
+.menu-root .advanced-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.2s;
+    opacity: 0;
+}
+
+.menu-root .advanced-panel.open {
+    max-height: 500px;
+    opacity: 1;
+    margin-top: 16px;
+}
+
+.menu-root .advanced-inner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.menu-root .adv-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.menu-root .adv-row:last-of-type {
+    margin-bottom: 0;
+}
+
+.menu-root .adv-label {
+    width: 90px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    flex-shrink: 0;
+}
+
+.menu-root .adv-label.secondary {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.menu-root .adv-input {
+    flex: 1;
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    color: var(--fg);
+    background: #fff;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.menu-root .adv-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.menu-root .adv-input::placeholder {
+    color: #b0b4bc;
+}
+
+.menu-root .adv-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.menu-root .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background 0.12s, transform 0.1s;
+    text-decoration: none;
+    font-family: var(--font-sans);
+}
+
+.menu-root .btn:active {
+    transform: scale(0.97);
+}
+
+.menu-root .btn-primary {
+    background: var(--accent);
+    color: #fff;
+}
+
+.menu-root .btn-primary:hover {
+    background: #2563eb;
+}
+
+.menu-root .btn-secondary {
+    background: #f0f1f3;
+    color: var(--fg);
+}
+
+.menu-root .btn-secondary:hover {
+    background: #e4e5e8;
+}
+
+.menu-root .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+
+.menu-root .btn-ghost:hover {
+    background: #f8f9fb;
+    color: var(--fg);
+}
+
+.menu-root .btn svg {
+    width: 13px;
+    height: 13px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+}
+
+.menu-root .project-section {
+    margin-bottom: 24px;
+}
+
+.menu-root .project-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.menu-root .project-bar label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+}
+
+.menu-root .project-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1 1 100%;
+    order: 3;
+    justify-content: flex-start;
+}
+
+.menu-root .chip-actions {
+    order: 2;
+    display: flex;
+    gap: 4px;
+}
+
+.menu-root .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    transition: all 0.12s;
+    user-select: none;
+}
+
+.menu-root .chip:hover {
+    border-color: #ccc;
+}
+
+.menu-root .chip.selected {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+
+.menu-root .chip .chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+}
+
+.menu-root .chip-action {
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.12s;
+    border: none;
+    background: none;
+    font-family: var(--font-sans);
+}
+
+.menu-root .chip-action:hover {
+    background: #f0f1f3;
+    color: var(--fg);
+}
+
+/* ── Responsive — Tablet / Mobile ── */
+@media (max-width: 700px) {
+    .menu-root .adv-row {
+        flex-wrap: wrap;
+    }
+    .menu-root .adv-label {
+        width: 100%;
+        margin-bottom: -4px;
+    }
+    .menu-root .controls-row {
+        gap: 6px;
+    }
+}
+@media (max-width: 480px) {
+    .menu-root .primary-search input {
+        height: 42px;
+        font-size: 14px;
+    }
+    .menu-root .search-hero h1,
+    .search-hero-heading {
+        font-size: 19px;
+    }
+}
+</style>
+
+<%
+/* ---------------------- menu.jspf — HTML + JS --------------------- */
+%>
+
+<div class="menu-root">
+<section class="search-hero">
+    <form action="<%= _menuCtxPath %>/search" id="sbox" method="get">
+        <div class="primary-search">
+            <svg class="ps-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+            <input type="text"
+                placeholder="全文搜索 — 输入关键词、类名、方法名…"
+                id="full"
+                name="<%= QueryParameters.FULL_SEARCH_PARAM %>"
+                value="<%= Util.formQuoteEscape(_menuFreetext) %>" />
+            <span class="ps-kbd">⌘K</span>
+        </div>
+
+        <div class="controls-row">
+            <button type="button" class="ctrl-btn" id="_menu-adv-toggle">
+                <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="18" y2="18"/></svg>
+                高级搜索
+                <svg class="arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <select class="ctrl-select" id="filetype"
+                name="<%= QueryParameters.TYPE_SEARCH_PARAM %>">
+                <option value="" <%= _menuSelectedType.isEmpty() ? " selected" : "" %>>任意类型</option>
+                <%
+                for (Map.Entry<String, String> _menuD : _menuTypeDescriptions) {
+                    String _menuTval = _menuD.getKey();
+                    String _menuTlabel = _menuD.getValue();
+                %><option value="<%= Util.formQuoteEscape(_menuTval) %>"
+                    <% if (_menuTval.equals(_menuSelectedType)) { %>selected="selected" <% } %>><%= Util.htmlize(_menuTlabel) %></option>
+                <%
+                }
+                %>
+            </select>
+        </div>
+
+        <div class="advanced-panel" id="_menu-advanced-panel">
+            <div class="advanced-inner">
+                <div class="adv-row">
+                    <span class="adv-label">定义</span>
+                    <input type="text" class="adv-input" id="defs"
+                        name="<%= QueryParameters.DEFS_SEARCH_PARAM %>"
+                        placeholder="按定义搜索，例如类名、接口名…"
+                        value="<%= Util.formQuoteEscape(_menuDefs) %>" />
+                </div>
+                <div class="adv-row">
+                    <span class="adv-label">符号</span>
+                    <input type="text" class="adv-input" id="refs"
+                        name="<%= QueryParameters.REFS_SEARCH_PARAM %>"
+                        placeholder="按符号搜索，例如变量名、方法名…"
+                        value="<%= Util.formQuoteEscape(_menuRefs) %>" />
+                </div>
+                <div class="adv-row">
+                    <span class="adv-label">文件路径</span>
+                    <input type="text" class="adv-input" id="path"
+                        name="<%= QueryParameters.PATH_SEARCH_PARAM %>"
+                        placeholder="按路径过滤，例如 src/main/java…"
+                        value="<%= Util.formQuoteEscape(_menuPath) %>" />
+                </div>
+                <div class="adv-row">
+                    <span class="adv-label">历史</span>
+                    <input type="text" class="adv-input" id="hist"
+                        name="<%= QueryParameters.HIST_SEARCH_PARAM %>"
+                        placeholder="搜索提交历史中的描述…"
+                        value="<%= Util.formQuoteEscape(_menuHist) %>" />
+                </div>
+                <div class="adv-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+                        搜索
+                    </button>
+                    <button type="reset" class="btn btn-secondary">清除</button>
+                    <button type="button" class="btn btn-ghost"
+                        onclick="window.open('<%= _menuCtxPath %>/help.jsp', '_blank')">帮助</button>
+                    <button type="button" class="btn btn-ghost"
+                        onclick="window.open('<%= _menuCtxPath %>/settings.jsp', '_self')">设置</button>
+                </div>
+            </div>
+        </div>
+
+        <select id="_menu-project-select"
+            name="<%= QueryParameters.PROJECT_SEARCH_PARAM %>"
+            multiple="multiple" style="display: none">
+            <%
+            for (Project _menuP : _menuAllowedProjects) {
+                String _menuPname = _menuP.getName();
+                boolean _menuSel = _menuRequestedProjects.contains(_menuPname) || !_menuAnyRequested;
+                String _menuSelAttr = _menuSel ? " selected" : "";
+            %><option value="<%= Util.formQuoteEscape(_menuPname) %>"
+                <%= _menuSelAttr %>><%= Util.htmlize(_menuPname) %></option>
+            <%
+            }
+            %>
+        </select>
+        <input type="hidden" id="<%= QueryParameters.NO_REDIRECT_PARAM %>"
+            name="<%= QueryParameters.NO_REDIRECT_PARAM %>" value="" />
+    </form>
+</section>
+
+<section class="project-section">
+    <div class="project-bar">
+        <label>项目</label>
+        <div class="project-chips" id="_menu-project-chips">
+            <%
+            for (Project _menuP : _menuAllowedProjects) {
+                String _menuPname = _menuP.getName();
+                boolean _menuSel = _menuRequestedProjects.contains(_menuPname) || !_menuAnyRequested;
+                String _menuSelAttr = _menuSel ? " selected" : "";
+            %><div class="chip" <%= _menuSelAttr %>
+                data-project="<%= Util.formQuoteEscape(_menuPname) %>">
+                <span class="chip-dot"></span>
+                <%= Util.htmlize(_menuPname) %>
+            </div>
+            <%
+            }
+            %>
+        </div>
+        <div class="chip-actions">
+            <button type="button" class="chip-action" data-action="select-all">全选</button>
+            <button type="button" class="chip-action" data-action="invert-all">反选</button>
+            <button type="button" class="chip-action" data-action="deselect-all">清除</button>
+        </div>
+    </div>
+</section>
+</div>
+
+<script type="text/javascript">
+/* <![CDATA[ */
+/* Hook used by utils.js to initialize jQuery UI autocomplete on the
+ * search fields (`full`, `defs`, `refs`, `path`, `hist`). Defined in
+ * utils-0.0.48.js; called from $(document).ready() after jQuery UI has
+ * loaded. Required for the search-field suggestion dropdown to appear. */
+document.domReady.push(function () { domReadyMenu(); });
 /* ]]> */
 </script>
-<form action="<%= request.getContextPath() %>/search" id="sbox" onsubmit="searchSubmit(this)">
-<div id="qtbl">
-    <table aria-label="query table">
-    <%
-    if (!projects.isEmpty()) {
-    %>
-    <tbody id="ptbl">
-    <tr>
-    <td id="projectLabelTd">
-    <label for="<%= QueryParameters.PROJECT_SEARCH_PARAM %>">Project(s)</label>
-    </td>
-    <td colspan="2">
-    <select tabindex="8" class="q" id="<%= QueryParameters.PROJECT_SEARCH_PARAM %>"
-        name="<%= QueryParameters.PROJECT_SEARCH_PARAM %>" multiple="multiple" size="<%=
-        Math.min(15, projectsSize) %>"><%
-        SortedSet<String> pRequested = new TreeSet<>(cfg.getRequestedProjects());
-        for (Group group : ph.getGroups()) {
-            Set<Project> groupProjects = ph.getAllGrouped(group);
-            if (!groupProjects.isEmpty()) {
-                %><optgroup label="<%= group.getName() %>"><%
-                for (Project p : groupProjects) {
-                    if (!p.isIndexed()) {
-                        continue;
-                    }
 
-                // TODO below "selected" has no effect if one refreshes the page
-                // with F5
+<script type="text/javascript">
+/* <![CDATA[ */
+(function () {
+    var projectChips   = document.getElementById('_menu-project-chips');
+    var projectSelect  = document.getElementById('_menu-project-select');
+    var advPanel       = document.getElementById('_menu-advanced-panel');
+    var advToggleBtn   = document.getElementById('_menu-adv-toggle');
+    var fullInput      = document.getElementById('full');
+    var sbox           = document.getElementById('sbox');
 
-                %><option value="<%= p.getName() %>"<%
-                    if (pRequested.contains(p.getName())) {
-                        %> selected="selected"<%
-                        pRequested.remove(p.getName());
-                    }
-                    if (!(messages = MessagesUtils.messagesToJson(p)).isEmpty()) {
-                        %> data-messages='<%= messages %>' data-messages-level='<%= MessagesUtils.getMessageLevel(p.getName()) %>' <%
-                    }
-                    %>><%= Util.formQuoteEscape(p.getName()) %></option><%
-                }
-                %></optgroup><%
-            }
+    function refreshProjectSelect() {
+        if (!projectSelect) return;
+        for (var i = 0; i < projectSelect.options.length; i++) {
+            var name = projectSelect.options[i].value;
+            var chip = projectChips
+                ? projectChips.querySelector('[data-project="' + name.replace(/"/g, '\\"') + '"]')
+                : null;
+            projectSelect.options[i].selected = !!(chip && chip.classList.contains('selected'));
         }
-
-        // Handle projects not listed in any group.
-        if (!ph.getGroups().isEmpty() && !ph.getAllUngrouped().isEmpty()) {
-            %><optgroup label="Other"><%
-        }
-        for (Project p : ph.getAllUngrouped()) {
-            if (!p.isIndexed()) {
-                continue;
-            }
-
-        %><option value="<%= p.getName() %>"<%
-            if (pRequested.contains(p.getName())) {
-                %> selected="selected"<%
-                pRequested.remove(p.getName());
-            }
-            if (!(messages = MessagesUtils.messagesToJson(p)).isEmpty()) {
-                %> data-messages='<%= messages %>' data-messages-level='<%= MessagesUtils.getMessageLevel(p.getName()) %>' <%
-            }
-            %>><%= Util.formQuoteEscape(p.getName()) %></option><%
-        }
-        if (!ph.getGroups().isEmpty() && !ph.getAllUngrouped().isEmpty()) {
-            %></optgroup><%
-        }
-    %></select>
-    </td>
-    </tr>
-    <tr>
-    <td colspan="3" >
-    <button tabindex="6" type="button"
-        onclick="selectAllProjects(); return false;"
-        >select all</button>
-    &nbsp;
-    <button tabindex="7" type="button"
-        onclick="invertAllProjects(); return false;"
-        >invert selection</button>
-    &nbsp;
-    <button tabindex="8" type="button"
-        onclick="deselectAllProjects(); return false;"
-        >clear</button>
-    </td>
-    </tr>
-    </tbody>
-    <%
     }
-    %>
-    <tbody>
-    <tr>
-        <td><label for="<%= QueryParameters.FULL_SEARCH_PARAM %>"
-              title="Text token(s) or other fields to be found (Lucene query--this is not full text)">
-            Full&nbsp;Search</label></td>
-        <td colspan="2"><input tabindex="1" class="q"
-                name="<%= QueryParameters.FULL_SEARCH_PARAM %>"
-                id="<%= QueryParameters.FULL_SEARCH_PARAM %>" type="text" value="<%=
-                Util.formQuoteEscape(queryParams.getFreetext()) %>"/></td>
-    </tr>
-    <tr>
-        <td><label for="<%= QueryParameters.DEFS_SEARCH_PARAM %>"
-              title="Definitions of function/variable/class">Definition</label></td>
-        <td colspan="2"><input class="q" tabindex="2"
-            name="<%= QueryParameters.DEFS_SEARCH_PARAM %>"
-            id="<%= QueryParameters.DEFS_SEARCH_PARAM %>" type="text" value="<%=
-            Util.formQuoteEscape(queryParams.getDefs()) %>"/></td>
-    </tr>
-    <tr>
-        <td><label for="<%= QueryParameters.REFS_SEARCH_PARAM %>"
-              title="Usage of function/variable/class">Symbol</label></td>
-        <td colspan="2"><input class="q" tabindex="3"
-            name="<%= QueryParameters.REFS_SEARCH_PARAM %>"
-            id="<%= QueryParameters.REFS_SEARCH_PARAM %>" type="text" value="<%=
-            Util.formQuoteEscape(queryParams.getRefs()) %>"/></td>
-    </tr>
-    <tr>
-        <td><label for="<%= QueryParameters.PATH_SEARCH_PARAM %>"
-              title="Path or parts of it (no need to use separators)">File&nbsp;Path</label></td>
-        <td colspan="2"><input class="q" tabindex="4"
-            name="<%= QueryParameters.PATH_SEARCH_PARAM %>"
-            id="<%= QueryParameters.PATH_SEARCH_PARAM %>" type="text" value="<%=
-            Util.formQuoteEscape(queryParams.getPath()) %>"/></td>
-    </tr>
-    <tr>
-        <td><label for="<%= QueryParameters.HIST_SEARCH_PARAM %>"
-              title="Search in project(s) repository log messages">History</label></td>
-        <td colspan="2"><input class="q" tabindex="5"
-            name="<%= QueryParameters.HIST_SEARCH_PARAM %>"
-            id="<%= QueryParameters.HIST_SEARCH_PARAM %>" type="text" value="<%=
-            Util.formQuoteEscape(queryParams.getHist()) %>"/></td>
-    </tr>
-    <tr>
-        <td id="typeLabelTd"><label for="<%= QueryParameters.TYPE_SEARCH_PARAM %>">Type</label></td>
-        <td><select class="q" tabindex="6" name="<%= QueryParameters.TYPE_SEARCH_PARAM %>"
-                id="<%= QueryParameters.TYPE_SEARCH_PARAM %>"><%
-                String selection = queryParams.getType();
-                %>
-                <option value="">Any</option><%
-                for (Map.Entry<String, String> d : SearchHelper.getFileTypeDescriptions()) {
-                    %>
-                <option value="<%= Util.formQuoteEscape(d.getKey()) %>"<%
-                    if (d.getKey().equals(selection)) {
-                        %> selected="selected"<%
-                    }
-                    %>><%= Util.htmlize(d.getValue()) %></option><%
-                }
-            %>
-            </select>
-        </td>
-        <td id="type-select-container">
-            <!-- filled with javascript -->
-        </td>
-    </tr>
-    </tbody>
-</table>
-<div id="form-controls">
-    <input tabindex="9" class="submit btn" onclick="$('#xrd').val(''); $('#sbox').submit()"
-           type="submit" value="Search"/>
-    <input tabindex="10" class="submit btn" onclick="clearSearchFrom();"
-           type="button" value="Clear"/>
-    <input tabindex="11" class="submit btn" onclick="window.open('help.jsp', '_blank');"
-           type="button" value="Help"/>
-    <input tabindex="12" class="submit btn" onclick="window.open('settings.jsp', '_self');"
-           type="button" value="Settings"/>
-</div>
-</div>
-<div id="ltbl">
-    <!-- filled with javascript -->
-</div>
-<input type="hidden" id="<%= QueryParameters.NO_REDIRECT_PARAM %>"
-       name="<%= QueryParameters.NO_REDIRECT_PARAM %>" value=""/>
-<input type="hidden" id="<%= QueryParameters.NUM_SELECTED_PARAM %>"
-       name="<%= QueryParameters.NUM_SELECTED_PARAM %>" value=""/>
-</form>
-<div class="clearfix"></div>
+
+    function handleChipClick(ev) {
+        var chip = ev.target.closest('.chip');
+        if (!chip || !projectChips || !projectChips.contains(chip)) return;
+        chip.classList.toggle('selected');
+        refreshProjectSelect();
+    }
+    function selectAllProjects() {
+        if (!projectChips) return;
+        var chips = projectChips.querySelectorAll('.chip');
+        for (var i = 0; i < chips.length; i++) chips[i].classList.add('selected');
+        refreshProjectSelect();
+    }
+    function invertAllProjects() {
+        if (!projectChips) return;
+        var chips = projectChips.querySelectorAll('.chip');
+        for (var i = 0; i < chips.length; i++) chips[i].classList.toggle('selected');
+        refreshProjectSelect();
+    }
+    function deselectAllProjects() {
+        if (!projectChips) return;
+        var chips = projectChips.querySelectorAll('.chip');
+        for (var i = 0; i < chips.length; i++) chips[i].classList.remove('selected');
+        refreshProjectSelect();
+    }
+
+    if (projectChips) projectChips.addEventListener('click', handleChipClick);
+    var chipActionBtns = document.querySelectorAll('.menu-root .chip-action[data-action]');
+    chipActionBtns.forEach(function (btn) {
+        var act = btn.getAttribute('data-action');
+        var fn = ({
+            'select-all':    selectAllProjects,
+            'invert-all':    invertAllProjects,
+            'deselect-all':  deselectAllProjects
+        })[act];
+        if (fn) btn.addEventListener('click', fn);
+    });
+
+    if (advToggleBtn && advPanel) {
+        advToggleBtn.addEventListener('click', function () {
+            advPanel.classList.toggle('open');
+            advToggleBtn.classList.toggle('active');
+        });
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            e.preventDefault();
+            if (fullInput) fullInput.focus();
+        }
+    });
+
+    refreshProjectSelect();
+})();
+/* ]]> */
+</script>
 <%
-}
 /* ---------------------- menu.jspf end --------------------- */
 %>
