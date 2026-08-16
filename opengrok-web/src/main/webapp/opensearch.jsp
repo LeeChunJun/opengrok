@@ -18,63 +18,76 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2009, 2025, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2009, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright 2011 Jens Elkner.
 Portions Copyright (c) 2018, 2020, Chris Fraire <cfraire@me.com>.
+Portions Copyright (c) 2026, UI Refactor.
+--%>
 
---%><%@page  session="false" errorPage="error.jsp" import="
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page  session="false" errorPage="error.jsp" import="
 java.util.Set,
 
 org.opengrok.indexer.web.Prefix,
 org.opengrok.indexer.web.QueryParameters,
 org.opengrok.indexer.web.Util"
 %>
+
 <%
 {
-    PageConfig cfg = PageConfig.get(request);
-    cfg.checkSourceRootExistence();
+    /* ---------------------- opensearch.jsp start ---------------------
+     *
+     * OpenSearch description (XML). The browser reads this when the
+     * user installs OpenGrok as a search engine. This page produces
+     * raw XML — not HTML — and does not use the new chrome
+     * (pageheader.jspf / foot.jspf).
+     */
+    PageConfig _osCfg = PageConfig.get(request);
+    _osCfg.checkSourceRootExistence();
 }
-%><%@
-
-include file="/projects.jspf"
-
-%><%
-    /* ---------------------- opensearch.jsp start --------------------- */
+%>
+<%@include file="/projects.jspf"%>
+<%
 {
-    PageConfig cfg = PageConfig.get(request);
+    StringBuilder _osUrl = new StringBuilder(128);
 
-    // Optimize for URLs up to 128 characters. 
-    StringBuilder url = new StringBuilder(128);
-    final String scheme = request.getScheme();
-    url.append(scheme).append("://");
-    url.append(cfg.getServerName());
+    /* 协议头：http/https/file */
+    final String _osScheme = request.getScheme();
+    _osUrl.append(_osScheme).append("://");
 
-    // Append port if needed.
-    int port = request.getServerPort();
-    if ((port != 80 && scheme.equals("http")) || (port != 443 && scheme.equals("https"))) {
-        url.append(':').append(port);
+    /* 主机名 */
+    PageConfig _osCfg = PageConfig.get(request);
+    _osUrl.append(_osCfg.getServerName());
+
+    /* 端口：Append port if needed. */
+    int _osPort = request.getServerPort();
+    if ((_osPort != 80 && _osScheme.equals("http")) || (_osPort != 443 && _osScheme.equals("https"))) {
+        _osUrl.append(':').append(_osPort);
     }
 
+    /* 搜索内容 */
     /* TODO  Bug 11749 ??? */
-    StringBuilder text = new StringBuilder();
-    url.append(request.getContextPath()).append(Prefix.SEARCH_P).append('?');
-    Set<String> projects = cfg.getRequestedProjects();
-    for (String name : projects) {
-        text.append(name).append(',');
-        Util.appendQuery(url, QueryParameters.PROJECT_SEARCH_PARAM, name);
+    StringBuilder _osText = new StringBuilder();
+    _osUrl.append(request.getContextPath()).append(Prefix.SEARCH_P).append('?');
+    Set<String> _osProjects = _osCfg.getRequestedProjects();
+    for (String _osName : _osProjects) {
+        _osText.append(_osName).append(',');
+        Util.appendQuery(_osUrl, QueryParameters.PROJECT_SEARCH_PARAM, _osName);
     }
-    if (!text.isEmpty()) {
-        text.setLength(text.length() - 1);
+    if (!_osText.isEmpty()) {
+        _osText.setLength(_osText.length() - 1);
     }
-%><?xml version="1.0" encoding="UTF-8"?>
+%>
+
+<?xml version="1.0" encoding="UTF-8"?>
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
-    <ShortName>OpenGrok <%= text.toString() %></ShortName>
-    <Description>Search in OpenGrok <%= text.toString() %></Description>
+    <ShortName>OpenGrok <%= _osText.toString() %></ShortName>
+    <Description>Search in OpenGrok <%= _osText.toString() %></Description>
     <InputEncoding>UTF-8</InputEncoding>
-    <Image height="16" width="16" type="image/png"><%= url + cfg.getCssDir() + "/img/icon.png" %></Image>
-<%-- <Url type="application/x-suggestions+json" template="suggestionURL"/>--%>
-    <Url template="<%= url.toString() %>&amp;<%= QueryParameters.FULL_SEARCH_PARAM_EQ %>{searchTerms}"
-        type="text/html"/>
+    <Image height="16" width="16" type="image/png"><%= _osUrl + _osCfg.getCssDir() + "/img/icon.png" %></Image>
+
+    <%-- <Url type="application/x-suggestions+json" template="suggestionURL"/>--%>
+    <Url type="text/html" template="<%= _osUrl.toString() %>&amp;<%= QueryParameters.FULL_SEARCH_PARAM_EQ %>{searchTerms}"/>
 </OpenSearchDescription>
 <%
 }
