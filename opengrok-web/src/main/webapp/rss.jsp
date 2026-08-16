@@ -18,10 +18,13 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2005, 2025, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2005, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright 2011 Jens Elkner.
+Portions Copyright (c) 2026, UI Refactor.
+--%>
 
---%><%@page import="
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page session="false" errorPage="error.jsp" import="
 java.text.SimpleDateFormat,
 java.util.Set,
 
@@ -31,99 +34,122 @@ org.opengrok.indexer.history.HistoryEntry,
 org.opengrok.indexer.history.HistoryGuru,
 org.opengrok.indexer.web.Util,
 org.opengrok.indexer.web.Prefix,
-org.opengrok.web.PageConfig"
-%>
-<%@ page import="jakarta.servlet.http.HttpServletResponse" %>
-<%@ page session="false" errorPage="error.jsp"%><%
-/* ---------------------- rss.jsp start --------------------- */
-{
-    PageConfig cfg = PageConfig.get(request);
-    cfg.checkSourceRootExistence();
+org.opengrok.web.PageConfig,
+jakarta.servlet.http.HttpServletResponse"%>
 
-    String redirectLocation = cfg.canProcess();
-    if (redirectLocation == null || !redirectLocation.isEmpty()) {
-        if (redirectLocation != null) {
-            response.sendRedirect(redirectLocation);
+<%
+/* ---------------------- rss.jsp start ---------------------
+ *
+ * RSS 2.0 feed for the history of a file or directory. Produces
+ * raw XML — not HTML — and does not use the new chrome
+ * (pageheader.jspf / foot.jspf). Authorization / redirect handling
+ * must happen before any output is written, so the early-exit
+ * branch is kept at the top of the body block.
+ *
+ * Variables are prefixed `_rss_` so the calling JSP's body block
+ * (which does not exist here — this is a toplevel jsp) does not
+ * collide with anything in the chrome fragments.
+ */
+{
+    PageConfig _rssCfg = PageConfig.get(request);
+    _rssCfg.checkSourceRootExistence();
+
+    String _rssRedirectLocation = _rssCfg.canProcess();
+    if (_rssRedirectLocation == null || !_rssRedirectLocation.isEmpty()) {
+        if (_rssRedirectLocation != null) {
+            response.sendRedirect(_rssRedirectLocation);
         } else {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
         }
         return;
     }
-    String path = cfg.getPath();
+    String _rssPath = _rssCfg.getPath();
     response.setContentType("text/xml");
-%><?xml version="1.0"?>
-<?xml-stylesheet type="text/xsl" href="<%= request.getContextPath()
-    %>/rss.xsl.xml"?>
+%>
+
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="<%= request.getContextPath() %>/rss.xsl.xml"?>
 <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
 <channel>
-    <title>Changes in <%= path.isEmpty()
+    <title>Changes in <%= _rssPath.isEmpty()
         ? "Cross Reference"
-        : Util.htmlize(cfg.getResourceFile().getName()) %></title>
-    <description><%= Util.htmlize(cfg.getDefineTagsIndex()) %></description>
+        : Util.htmlize(_rssCfg.getResourceFile().getName()) %>
+    </title>
+    <description><%= Util.htmlize(_rssCfg.getDefineTagsIndex()) %></description>
     <language>en</language>
-    <copyright>Copyright 2025</copyright>
-    <generator>Java</generator><%
-    History history;
-    if (cfg.isDir()) {
-        history = new DirectoryHistoryReader(cfg.getHistoryDirs()).getHistory();
+    <copyright>Copyright 2026</copyright>
+    <generator>Java</generator>
+<%
+    History _rssHistory;
+    if (_rssCfg.isDir()) {
+        _rssHistory = new DirectoryHistoryReader(_rssCfg.getHistoryDirs()).getHistory();
     } else {
-        history = HistoryGuru.getInstance().getHistory(cfg.getResourceFile());
+        _rssHistory = HistoryGuru.getInstance().getHistory(_rssCfg.getResourceFile());
     }
-    if (history != null) {
-        int i = 20;
-        for (HistoryEntry entry : history.getHistoryEntries()) {
-            if (i-- <= 0) {
+    if (_rssHistory != null) {
+        int _rssI = 20;
+        for (HistoryEntry _rssEntry : _rssHistory.getHistoryEntries()) {
+            if (_rssI-- <= 0) {
                 break;
             }
-            if (entry.isActive()) {
-    %>
+            if (_rssEntry.isActive()) {
+%>
     <item>
-        <title><%
+        <title>
+        <%
             /*
              * Newlines would result in HTML tags inside the 'title' which
              * causes the title to be displayed as 'null'. Print first line
              * of the message. The whole message will be printed in description.
              */
-            String replaced = entry.getMessage().split("\n")[0];
-        %><%= Util.htmlize(entry.getRevision()) %> - <%= Util.htmlize(replaced) %></title>
-        <link><%
-            String requestURL = request.getScheme() +
+            String _rssReplaced = _rssEntry.getMessage().split("\n")[0];
+        %>
+        <%= Util.htmlize(_rssEntry.getRevision()) %> - <%= Util.htmlize(_rssReplaced) %>
+        </title>
+
+        <link>
+        <%
+            String _rssRequestUrl = request.getScheme() +
                     "://" +
-                    cfg.getServerName() +
+                    _rssCfg.getServerName() +
                     ":" +
                     request.getLocalPort() +
                     Util.uriEncodePath(request.getContextPath()) +
                     Prefix.HIST_L +
-                    Util.uriEncodePath(cfg.getPath()) +
+                    Util.uriEncodePath(_rssCfg.getPath()) +
                     "#" +
-                    Util.uriEncode(entry.getRevision());
-        %><%= requestURL %></link>
-        <description><%
-            for (String e : entry.getMessage().split("\n")) {
-            %>
-            <%= Util.htmlize(e) %><%
-            }
-            %>
+                    Util.uriEncode(_rssEntry.getRevision());
+        %>
+        <%= _rssRequestUrl %>
+        </link>
+
+        <description>
+        <%  for (String _rssE : _rssEntry.getMessage().split("\n")) { %>
+            <%= Util.htmlize(_rssE) %>
+        <%  } %>
 
             List of files:
             <%
-            if (cfg.isDir()) {
-                Set<String> files = entry.getFiles();
-                if (files != null) {
-                    for (String entryFile : files) {
+            if (_rssCfg.isDir()) {
+                Set<String> _rssFiles = _rssEntry.getFiles();
+                if (_rssFiles != null) {
+                    for (String _rssEntryFile : _rssFiles) {
             %>
-            <%= Util.htmlize(entryFile) %><%
+                        <%= Util.htmlize(_rssEntryFile) %>
+            <%
                     }
                 }
             } else {
-            %><%= Util.htmlize(path) %><%
+            %><%= Util.htmlize(_rssPath) %><%
             }
         %>
         </description>
-        <pubDate><%
-            SimpleDateFormat df = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z");
-        %><%= Util.htmlize(df.format(entry.getDate())) %></pubDate>
-        <dc:creator><%= Util.htmlize(entry.getAuthor()) %></dc:creator>
+
+        <pubDate>
+        <% SimpleDateFormat _rssDf = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z");%>
+        <%= Util.htmlize(_rssDf.format(_rssEntry.getDate())) %>
+        </pubDate>
+        <dc:creator><%= Util.htmlize(_rssEntry.getAuthor()) %></dc:creator>
     </item>
 <%
             }
