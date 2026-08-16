@@ -59,7 +59,7 @@ jakarta.servlet.http.HttpServletResponse"%>
 /* ---------------------- error.jsp start --------------------- */
 {
     PageConfig _chromeErrorCfg = PageConfig.get(request);
-    _chromeErrorCfg.setTitle("Error!");
+    _chromeErrorCfg.setTitle("OpenGrok Error!");
 
     // Set status to Internal error. This should help to avoid caching
     // the page by some proxies.
