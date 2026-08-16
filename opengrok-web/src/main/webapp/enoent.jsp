@@ -16,50 +16,58 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2005, 2023, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2005, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright 2011 Jens Elkner.
 Portions Copyright (c) 2018, Chris Fraire <cfraire@me.com>.
-
+Portions Copyright (c) 2026, UI Refactor.
 --%>
-<%@page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
-<%@page session="false" errorPage="error.jsp" isErrorPage="true"%><%
+
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page session="false" errorPage="error.jsp" isErrorPage="true"%>
+
+<style>
+:root {
+    --fg:        #24292f;
+}
+
+.enoent-page { max-width: 920px; font-size: 14px; color: var(--fg); line-height: 1.6; }
+.enoent-page h3 { font-size: 18px; font-weight: 600; margin: 8px 0 12px; color: #cf222e; }
+.enoent-page p { margin: 8px 0; }
+</style>
+
+<%-- enoent.jsp start
+
+    enoent.jsp -- 404 file not found page. Uses pageheader.jspf +
+    foot.jspf for the new chrome.
+--%>
+<%
 /* ---------------------- enoent.jsp start --------------------- */
 {
-    PageConfig cfg = PageConfig.get(request);
-    cfg.checkSourceRootExistence();
-    cfg.setTitle("File not found");
+    PageConfig _chromeEnoentCfg = PageConfig.get(request);
+    _chromeEnoentCfg.checkSourceRootExistence();
+    _chromeEnoentCfg.setTitle("OpenGrok File not found");
 }
-%><%@
-
-include file="/httpheader.jspf"
-
-%><body>
-<div id="page">
-    <header id="whole_header">
-        <%@include file="pageheader.jspf" %>
-        <div id="Masthead">Error: file not found</div>
-        <div id="sbar"><%@
-
-include file="/menu.jspf"
-
-        %></div>
-    </header>
+%>
+<%@include file="pageheader.jspf" %>
+<main class="container">
+<div class="enoent-page">
 <%
 {
-    PageConfig cfg = PageConfig.get(request);
+    PageConfig _chromeEnoentCfg = PageConfig.get(request);
     String configError = "";
-    if (!cfg.hasHistory()) {
+    if (!_chromeEnoentCfg.hasHistory()) {
         configError = "Resource lacks history info.";
     }
 %>
-    <h3 class="error">Error: File not found!</h3>
+    <h3>Error: File not found!</h3>
     <p>The requested resource is not available. </p>
     <p> <%= configError %> </p>
+</div>
+</main>
 <%
 }
-/* ---------------------- enoent.jsp end --------------------- */
-%><%@
-
-include file="/foot.jspf"
-
 %>
+<%@ include file="/foot.jspf" %>
+<%= PageConfig.get(request).getScripts() %>
+</body>
+</html>
