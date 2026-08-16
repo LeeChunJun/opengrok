@@ -18,62 +18,69 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2009, 2022, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2009, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright 2011 Jens Elkner.
 Portions Copyright (c) 2018, Chris Fraire <cfraire@me.com>.
-
+Portions Copyright (c) 2026, UI Refactor.
 --%>
-<%@page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
-<%@page session="false" errorPage="error.jsp" import="
-org.opengrok.indexer.web.Util"
-%><%
-{
-    PageConfig cfg = PageConfig.get(request);
-    cfg.checkSourceRootExistence();
+
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ page session="false" errorPage="error.jsp" import="
+org.opengrok.indexer.web.Util"%>
+
+<style>
+:root {
+    --fg:        #24292f;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --accent:    #0969da;
+    --bg:        #f6f8fa;
+    --border:    #d0d7de;
+    --border-light: #eaeef2;
 }
-%><%@
 
-include file="/projects.jspf"
+.status-page { max-width: 920px; font-size: 14px; color: var(--fg); line-height: 1.6; }
+.status-page h1 { font-size: 22px; font-weight: 600; margin: 8px 0 12px; }
+.status-page p { margin: 8px 0; }
+.status-page code { background: var(--bg); padding: 1px 5px; border-radius: 3px;
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--accent); }
+.status-page pre { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px 14px; font-size: 12.5px; font-family: var(--font-mono);
+    overflow-x: auto; line-height: 1.55; }
+</style>
 
-%><%
-/* ---------------------- status.jsp start --------------------- */
-{
-    PageConfig cfg = PageConfig.get(request);
-    cfg.setTitle("Status");
-}
-%><%@
+<%-- status.jsp start
 
-include file="/httpheader.jspf"
-
-%>
-<body>
-    <div id="page">
-        <header id="whole_header">
-            <%@include file="/pageheader.jspf" %>
-            <div id="Masthead"></div>
-        </header>
-        <div id="status">
-            <h1>OpenGrok status page</h1>
-            <p>
-This page is only used for testing purposes to dump some
-internal settings on your OpenGrok server.</p><%
-{
-        PageConfig cfg = PageConfig.get(request);
-        if (cfg.getEnv().isChattyStatusPage()) {
-            Util.dumpConfiguration(out);
-        } else {
-        %><p>
-For security reasons, printing of internal settings is not enabled by
-default. To enable, set the property <code>chattyStatusPage</code> to
-<code>true</code> in <code>configuration.xml</code>.</p><%
-        }
-        %>
-        </div>
+    status.jsp -- OpenGrok status / diagnostics page. Uses pageheader.jspf +
+    foot.jspf for the new chrome (no mast.jsp, since status is a static
+    diagnostics page).
+--%>
 <%
+{
+    PageConfig _chromeStatusCfg = PageConfig.get(request);
+    _chromeStatusCfg.setTitle("OpenGrok Status");
+    _chromeStatusCfg.checkSourceRootExistence();
 }
-/* ---------------------- status.jsp start --------------------- */
-%><%@
-
-include file="/foot.jspf"
-
 %>
+<%@include file="/projects.jspf"%>
+<%@include file="/pageheader.jspf" %>
+<main class="container">
+<div class="status-page">
+    <h1>OpenGrok status page</h1>
+    <p>This page is only used for testing purposes to dump some internal settings on your OpenGrok server.</p>
+<%
+{
+    if (PageConfig.get(request).getEnv().isChattyStatusPage()) {
+        Util.dumpConfiguration(out);
+    } else {
+%>
+        <p>For security reasons, printing of internal settings is not enabled by default. To enable, set the property <code>chattyStatusPage</code> to <code>true</code> in <code>configuration.xml</code>.</p>
+<%
+    }
+}
+%>
+</div>
+</main>
+<%@ include file="/foot.jspf" %>
+<%= PageConfig.get(request).getScripts() %>
+</body>
+</html>
