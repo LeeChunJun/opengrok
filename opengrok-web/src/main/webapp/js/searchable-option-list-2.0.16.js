@@ -400,20 +400,55 @@
                 $form = this.$input.parents('form').first();
         
             if ($form && $form.length === 1 && !$form.data(this.WINDOW_EVENTS_KEY)) {
+                /*
+                 * Modified for OpenGrok in 2024: 表单 reset (清除按钮)
+                 * 语义应为"还原到默认/未筛选状态"，但原 resetFunction
+                 * 只是把每个 radio 还原到 solOption.selected —— 即
+                 * 初始页面载入时 JSP 服务端渲染的 selected 属性。
+                 *
+                 * 对于 menu.jspf 的 #type：QueryBuilder.getType() 不
+                 * 为空时，JSP 会渲染 <option ... selected>，导致
+                 * SOL 把这个值当作 "initial state" 记下来，点击【清除】
+                 * 后该 radio 仍保持 checked，对应 chip "C" 也仍在
+                 * #type-select-container 里残留。
+                 *
+                 * 修复：reset 时不再恢复成 initial selected，而是把
+                 * 所有 radio 强制 uncheck，并把 value=""（占位选项）
+                 * 设为 checked —— 与 "任意类型" 期望一致。
+                 *
+                 * 由于 form.reset 会原生把原生 <input> 还原（但不会
+                 * 动 SOL 生成的 <input>，因为它们不在 form 的原生
+                 * 输入里），我们在 reset 事件里手工修复 SOL 的状态，
+                 * 并通过 setTimeout(0) 在浏览器原生 reset 之后再
+                 * 跑一次，覆盖任何遗漏路径。
+                 */
                 let resetFunction = function () {
                     let $changedItems = [];
+                    let $emptyItem = null;
 
                     $form.find('.sol-option input').each(function (index, item) {
                         let $item = $(item),
-                            initialState = $item.data('sol-item').selected;
+                            solOption = $item.data('sol-item');
 
-                        if ($item.prop('checked') !== initialState) {
+                        if (solOption.value === '' || solOption.value == null) {
+                            $emptyItem = $item;
+                            return; // placeholder handled below
+                        }
+
+                        if ($item.prop('checked')) {
                             $item
-                                .prop('checked', initialState)
-                                .trigger('sol-change', true);
+                                .prop('checked', false)
+                                .trigger('sol-deselect');
                             $changedItems.push($item);
                         }
                     });
+
+                    if ($emptyItem && !$emptyItem.prop('checked')) {
+                        $emptyItem
+                            .prop('checked', true)
+                            .trigger('sol-change', true);
+                        $changedItems.push($emptyItem);
+                    }
 
                     if ($changedItems.length > 0 && $.isFunction(self.config.events.onChange)) {
                         self.config.events.onChange.call(self, self, $changedItems);
@@ -995,6 +1030,33 @@
                 }
             }
 
+            /*
+             * Modified for OpenGrok in 2024: 单选模式强制一致性。
+             * 当 form.reset 触发 SOL 自己的 reset handler（line 423）
+             * 时，resetFunction 会把所有 solOption.selected===true 的
+             * radio 都设为 checked=true 并触发 sol-change，但不会
+             * uncheck 其它 radio（虽然单选 name 分组在浏览器层会互
+             * 斥，SOL 内部逻辑依赖 sol-deselect 事件触发 _remove）。
+             * 随后 utils.js 的 clearSearchFrom() → selectRadio("")
+             * 会发现空值 radio 已 checked 而不触发 change，于是
+             * 不会发出 sol-deselect → 旧 chip 残留。这里在单选模式
+             * 下，任何 selectionChange 都先强制 uncheck 其它 radio
+             * （触发它们自己的 sol-deselect → _removeSelectionDisplayItem），
+             * 保证 chip 与 checked 状态始终一致。
+             */
+            if (!this.config.multiple && $changeItem.prop('checked')) {
+                let inputName = $changeItem.attr('name');
+                this.$selectionContainer
+                    .find('input[type="radio"][name="' + inputName + '"]')
+                    .not($changeItem)
+                    .filter(':checked')
+                    .each(function () {
+                        let $other = $(this);
+                        $other.prop('checked', false);
+                        $other.trigger('sol-deselect');
+                    });
+            }
+
             if ($changeItem.prop('checked')) {
                 this._addSelectionDisplayItem($changeItem);
             } else {
@@ -1051,6 +1113,25 @@
                 $displayItemText;
 
             /*
+             * Modified for OpenGrok in 2024: chip 去重保护。
+             * 原实现无条件 append 新 chip，导致 selectRadio("") /
+             * _selectionChange / _renderOption(init) 多次触发时会
+             * 在 .sol-current-selection 内累积同 label 的 chip。
+             * 这里按 solOptionItem.value 去重：已存在同 value 的
+             * chip 时复用并刷新内容，不创建新节点。
+             */
+            let $dup = this.$showSelectionContainer && solOptionItem
+                ? this.$showSelectionContainer.children('.sol-selected-display-item')
+                    .filter(function () {
+                        return $(this).data('sol-value') === solOptionItem.value;
+                    }).first()
+                : $();
+            if ($dup.length) {
+                solOptionItem.displaySelectionItem = $dup;
+                return;
+            }
+
+            /*
              * Modified for OpenGrok in 2016, 2019.
              */
             let label = solOptionItem.label;
@@ -1067,6 +1148,11 @@
                 .append($displayItemText)
                 .attr('title', solOptionItem.tooltip)
                 .data('label', solOptionItem.label)
+                /*
+                 * Modified for OpenGrok in 2024: 写入 sol-value 作
+                 * 去重判据。配合上面去重检查避免 chip 累积。
+                 */
+                .data('sol-value', solOptionItem.value)
                 .appendTo(this.$showSelectionContainer)
                 .dblclick(function () { // Modified for OpenGrok in 2017.
                     $changedItem.dblclick();

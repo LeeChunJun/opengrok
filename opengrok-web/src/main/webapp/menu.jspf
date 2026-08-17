@@ -803,6 +803,42 @@ document.domReady.push(function () { domReadyMenu(); });
         if (fn) btn.addEventListener('click', fn);
     });
 
+    /*
+     * 清除（type="reset"）按钮的表单 reset 事件：
+     * 浏览器会原生重置 form 内的 <input>/<select>，但 .chip
+     * 是纯 DOM 节点不在原生 form 控件里，必须在 reset 事件里
+     * 手工把它们恢复到 JSP 渲染时的 initial selected 状态
+     * （与 _menu-project-select 的初始 selected 对齐）。
+     *
+     * 与 SOL 一样，浏览器在 reset 事件触发后才真正重置表单
+     * 控件，所以这里也用 setTimeout(..., 0) 再跑一次，覆盖
+     * 任何遗漏路径（特别是 _menu-project-select 被原生还原
+     * 之后再次同步 chip 状态）。
+     */
+    if (sbox && projectChips) {
+        var chipInitialStates = [];
+        var chipNodes = projectChips.querySelectorAll('.chip');
+        for (var ci = 0; ci < chipNodes.length; ci++) {
+            chipInitialStates.push(chipNodes[ci].classList.contains('selected'));
+        }
+        var resetChipsToInitial = function () {
+            var nodes = projectChips.querySelectorAll('.chip');
+            for (var i = 0; i < nodes.length; i++) {
+                var shouldSelect = !!chipInitialStates[i];
+                if (shouldSelect) {
+                    nodes[i].classList.add('selected');
+                } else {
+                    nodes[i].classList.remove('selected');
+                }
+            }
+            refreshProjectSelect();
+        };
+        sbox.addEventListener('reset', function () {
+            resetChipsToInitial();
+            setTimeout(resetChipsToInitial, 0);
+        });
+    }
+
     if (advToggleBtn && advPanel) {
         advToggleBtn.addEventListener('click', function () {
             advPanel.classList.toggle('open');
