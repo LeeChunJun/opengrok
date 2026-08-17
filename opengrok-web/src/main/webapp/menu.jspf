@@ -86,11 +86,15 @@ for (Project _menuP : _menuProjects) {
 %>
 
 <style>
-/* ── menu.jspf — new search-hero + project-chips styles ──
+/* ── menu.jspf — search-form + project-chips styles ──
  *
  * Extracted from index.jsp so any page that includes this fragment
- * renders an identical hero/chips block. The .menu-root wrapper keeps
+ * renders an identical form/chips block. The .menu-root wrapper keeps
  * the rules from leaking into the surrounding chrome.
+ *
+ * The hero heading + subtitle live in the calling page (e.g. index.jsp
+ * via .search-hero-heading / .search-hero-subtitle) and are styled
+ * there; only the .search-hero container itself is styled here.
  */
 .menu-root {
     --bg: #f4f5f7;
@@ -110,26 +114,6 @@ for (Project _menuP : _menuProjects) {
 
 .menu-root .search-hero {
     margin-bottom: 28px;
-}
-
-/* Heading styles for the search page. They apply whether the h1/p
- * are rendered as direct children of .menu-root .search-hero (legacy
- * layout) or as standalone elements placed above the menu.jspf include
- * by the calling page (current index.jsp layout — class
- * `.search-hero-heading`). */
-.menu-root .search-hero h1,
-.search-hero-heading {
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    margin-bottom: 4px;
-}
-
-.menu-root .search-hero p,
-.search-hero-subtitle {
-    font-size: 14px;
-    color: var(--muted);
-    margin-bottom: 20px;
 }
 
 .menu-root .primary-search {
@@ -486,10 +470,6 @@ for (Project _menuP : _menuProjects) {
     .menu-root .primary-search input {
         height: 42px;
         font-size: 14px;
-    }
-    .menu-root .search-hero h1,
-    .search-hero-heading {
-        font-size: 19px;
     }
 }
 </style>
