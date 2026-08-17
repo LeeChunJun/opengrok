@@ -472,6 +472,133 @@ for (Project _menuP : _menuProjects) {
         font-size: 14px;
     }
 }
+
+/* ── menu.jspf — SOL overrides (for #type) ──
+ *
+ * utils-0.0.48.js → init_sol_on_type_combobox() 会把原生
+ * <select id="type"> 隐藏，并生成 div.sol-container；
+ * 弹出的面板被 utils 渲染到 #type-select-container。
+ *
+ * 下面的规则只覆盖颜色 / 圆角 / 间距，让 SOL 沿用
+ * .menu-root 的设计语言，行为与原版一致（仍是单选下拉，
+ * 仍由 SOL 提供输入过滤）。注意：utils-0.0.48.js 把 name
+ * 临时移除并在选择时同步回原 select，表单提交不受影响。
+ *
+ * 重要：default/style-1.0.6.css 第 1513 行有一条
+ *   select#project, select#type { width:30px; ... }
+ * 会让 SOL 在初始化时把容器宽度量成 30px。这里用
+ * .menu-root 选择器 + 更高的特异性覆盖掉它。
+ */
+.menu-root select#type.ctrl-select {
+    width: 120px;            /* 覆盖 style-1.0.6.css 的 30px */
+    height: 34px;            /* 同步外壳高度，避免量出来是 20px */
+    visibility: hidden;
+}
+
+.menu-root .sol-container.ctrl-select {
+    /* 继承 .ctrl-select 的视觉，但带 caret 留位 */
+    width: 120px;            /* 显式宽度，对抗 SOL 写入的 30px */
+    height: 34px;
+    line-height: 34px;
+    font-size: 12.5px;
+    font-family: var(--font-sans);
+    color: var(--fg);
+    background: var(--surface);
+    border: 1px solid var(--border);     /* ← 线框颜色从这里改 */
+    border-radius: 6px;
+    padding: 0 30px 0 12px;
+    box-sizing: border-box;
+    cursor: pointer;
+    position: relative;
+    transition: border-color .12s, box-shadow .12s;
+}
+.menu-root .sol-container.ctrl-select:hover {
+    border-color: #d1d5db;
+}
+.menu-root .sol-container.ctrl-select.sol-active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.menu-root .sol-container.ctrl-select .sol-inner-container {
+    /* 关键：SOL 自己会再画一层 .sol-inner-container 的灰底，
+     * 这里把它的背景/边框全去掉，让外壳透出来。 */
+    position: static;
+    height: 100%;
+    line-height: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+}
+.menu-root .sol-container.ctrl-select .sol-input-container {
+    position: absolute;
+    inset: 0 30px 0 12px;     /* 让原 <input> 占满外壳，caret 在右边 */
+}
+.menu-root .sol-container.ctrl-select .sol-input-container input {
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    padding: 0;
+    /* 抵消 SOL 默认 .sol-input-container input[type="text"]
+     * 的 padding:0 7px，避免文字左移 7px 与左侧基线不齐 */
+    margin: 0;
+    text-indent: 0;
+}
+.menu-root .sol-container.ctrl-select .sol-caret-container {
+    /* 把 caret 容器放进外壳 padding-right:30px 的区域里，
+     * 让小三角和左侧文字基线对齐——默认它是 right:0 贴在
+     * 外壳最右边缘，视觉上就"飘到中间"了。 */
+    width: 18px;
+    right: 12px;             /* 与左侧 padding-left:12px 对齐 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.menu-root .sol-container.ctrl-select .sol-caret {
+    /* 覆盖 SOL 默认 left:10px —— 父容器已是 flex 居中 */
+    position: static;
+    left: 0;
+    border-top-color: var(--muted);
+    border-top-width: 5px;
+    border-right-width: 5px;
+    border-left-width: 5px;
+}
+
+/* 弹出层：保持 .menu-root 的设计语言 */
+.menu-root .sol-selection-container {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+    font-family: var(--font-sans);
+    overflow: hidden;
+    min-width: 180px;        /* 与外壳对齐，长选项不截断 */
+}
+.menu-root #type-select-container .sol-option {
+    padding: 7px 12px;
+    font-size: 13px;
+    color: var(--fg);
+}
+.menu-root #type-select-container .sol-option:hover {
+    background: #f8f9fb;
+}
+.menu-root #type-select-container .sol-option.keyboard-selection {
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+.menu-root #type-select-container .sol-radio {
+    accent-color: var(--accent);
+}
+.menu-root #type-select-container .sol-no-results {
+    color: var(--muted);
+    font-size: 12px;
+    padding: 10px 12px;
+}
 </style>
 
 <%
@@ -497,7 +624,7 @@ for (Project _menuP : _menuProjects) {
                 高级搜索
                 <svg class="arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
-            <select class="ctrl-select" id="filetype"
+            <select class="ctrl-select" id="type"
                 name="<%= QueryParameters.TYPE_SEARCH_PARAM %>">
                 <option value="" <%= _menuSelectedType.isEmpty() ? " selected" : "" %>>任意类型</option>
                 <%
@@ -510,6 +637,12 @@ for (Project _menuP : _menuProjects) {
                 }
                 %>
             </select>
+            <!--
+              utils-0.0.48.js 通过 $("#type-select-container") 拿到
+              resultsContainer，把 SOL 的"已选 chip + 弹层"渲染到这里。
+              位置在 select 之后、controls-row 之内，使弹层相对控件行定位。
+            -->
+            <div id="type-select-container" class="sol-results-slot"></div>
         </div>
 
         <div class="advanced-panel" id="_menu-advanced-panel">

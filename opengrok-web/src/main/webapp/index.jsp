@@ -844,5 +844,6 @@ Portions Copyright (c) 2026, UI Refactor.
 })();
 /* ]]> */
 </script>
+<%= PageConfig.get(request).getScripts() %>
 </body>
 </html>
