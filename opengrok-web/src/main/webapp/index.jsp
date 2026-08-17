@@ -82,6 +82,27 @@ Portions Copyright (c) 2026, UI Refactor.
    * --accent / --accent-dim / --font-sans / --font-mono) are inherited
    * from httpheader.jspf and are NOT redefined here. */
 
+/* ── Page background + container width (index.jsp override) ──
+ *
+ * httpheader.jspf ships a 1200px-wide shared container and no explicit
+ * <body> background, which leaves <body> at the browser default (white).
+ * The design (docs/ui/index.html) targets a 960px content column on a
+ * light gray (#f4f5f7) page background. We pin both here so other pages
+ * that share the same chrome keep their 1200px layout while this page
+ * alone matches the design. */
+body {
+  background: var(--bg);
+}
+
+main.container {
+  max-width: 960px;
+  padding: 36px 24px 48px;
+}
+
+@media (max-width: 700px) {
+  main.container { padding: 24px 16px 36px; }
+}
+
 /* ── Search hero (heading + subtitle) ──
  *
    * The <h1 class="search-hero-heading"> and
