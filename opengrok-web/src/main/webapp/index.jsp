@@ -291,18 +291,26 @@ main.container {
   flex-wrap: nowrap;
 }
 
-.result-file-header > a {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
+/* File-path link is the only direct-child <a> that should fill the
+ * remaining width. Earlier rules used `.result-file-header > a` which
+ * also matched the three .action-btn links and made them stretch. */
+.result-file-header > a.file-link {
+  display: block;          /* keep the path on a single line */
+  flex: 1 1 0;
   min-width: 0;
+  max-width: 100%;
   text-decoration: none;
   color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   transition: color 0.12s;
 }
 
-.result-file-header > a:hover {
+.result-file-header > a.file-link:hover {
   color: var(--accent);
 }
 
@@ -315,18 +323,13 @@ main.container {
   flex-shrink: 0;
 }
 
-.result-file-header .file-path {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
+/* Action-button cluster sits on the right and must NOT stretch even
+ * though it lives in the same flex row as the file-link. */
 .result-file-header .file-actions {
   display: flex;
+  align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -334,8 +337,11 @@ main.container {
 .action-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 4px 10px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: 5px;
   font-size: 12px;
   border: 1px solid #e5e7eb;
@@ -346,6 +352,7 @@ main.container {
   transition: background 0.12s, color 0.12s, border-color 0.12s;
   text-decoration: none;
   white-space: nowrap;
+  flex: 0 0 auto;
   flex-shrink: 0;
 }
 
@@ -448,8 +455,19 @@ main.container {
   color: #1e40af;
 }
 
+/* Down-arrow SVG inside the expand button. Rotates 180° when the
+ * file card is expanded so the same icon flips from "down" to "up". */
 .result-expand-btn .arrow {
   display: inline-block;
+  vertical-align: -2px;
+  margin-left: 4px;
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   transition: transform 0.2s;
 }
 
@@ -755,10 +773,12 @@ main.container {
           var hits = entry.hits;
           html += '<div class="result-file-card">';
           html += '<div class="result-file-header">';
-          html += '<a href="' + window.contextPath + '/xref/' + encodeURIComponent(entry.path) + '">' + escapeHtml(entry.path) + '</a>';
+          html += '<a class="file-link" href="' + window.contextPath + '/xref/' + encodeURIComponent(entry.path) + '">' + escapeHtml(entry.path) + '</a>';
+          html += '<div class="file-actions">';
           html += '<a class="action-btn" title="History" href="' + window.contextPath + '/history/' + encodeURIComponent(entry.path) + '"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></a>';
           html += '<a class="action-btn" title="Annotate" href="' + window.contextPath + '/xref/' + encodeURIComponent(entry.path) + '?an=true"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></a>';
           html += '<a class="action-btn" title="Download" href="' + window.contextPath + '/download/' + encodeURIComponent(entry.path) + '"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>';
+          html += '</div>';
           html += '</div>';
           hits.forEach(function (h, i) {
             var lineClass = (i >= MAX_HITS_PER_CARD) ? 'result-line result-line-overflow' : 'result-line';
@@ -770,7 +790,10 @@ main.container {
           });
           if (hits.length > MAX_HITS_PER_CARD) {
             var hiddenCount = hits.length - MAX_HITS_PER_CARD;
-            html += '<button class="result-expand-btn" type="button">\u25bc 显示剩余 ' + hiddenCount + ' 条匹配行</button>';
+            html += '<button class="result-expand-btn" type="button">'
+                  + '显示剩余 ' + hiddenCount + ' 条匹配行'
+                  + '<svg class="arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>'
+                  + '</button>';
           }
           html += '</div>';
         });
@@ -787,7 +810,9 @@ main.container {
         if (!card) return;
         var expanded = card.classList.toggle('expanded');
         var totalHidden = card.querySelectorAll('.result-line-overflow').length;
-        btn.innerHTML = (expanded ? '\u25b2 收起' : '\u25bc 显示剩余 ' + totalHidden + ' 条匹配行');
+        btn.innerHTML = (expanded
+          ? '收起<svg class="arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>'
+          : '显示剩余 ' + totalHidden + ' 条匹配行<svg class="arrow" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>');
       });
     }
   }
