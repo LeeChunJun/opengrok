@@ -729,6 +729,15 @@ main.container {
     });
   }
 
+  /* encodeURIComponent keeps '/' encoded as %2F by default, which makes
+   * hover tooltips and status-bar links unreadable (e.g.
+   * "goldfish%2Ftools%2F..." instead of "goldfish/tools/..."). Server-side
+   * URIEncoder used by the upstream OpenGrok JSPs leaves '/' untouched,
+   * so we mirror that here. */
+  function encodePath(s) {
+    return encodeURIComponent(String(s)).replace(/%2F/g, '/');
+  }
+
   function renderResults(data, query) {
     if (!resultsSection || !resultsList || !resultsHeader) return;
     resultsSection.classList.add('visible');
@@ -750,10 +759,18 @@ main.container {
       html = '<div class="results-empty">未找到匹配项</div>';
     } else {
       var groups = Object.create(null);
-      filePaths.forEach(function (path) {
+      filePaths.forEach(function (rawPath) {
+        /* Search-result paths returned by /api/v1/search are stored in
+         * Lucene as project-relative paths that BEGIN with '/' (see
+         * IndexDatabase#addFile and AnalyzerGuru#populateDocument where
+         * QueryBuilder.PATH is the path from source root). Strip that
+         * leading slash so we don't end up with a doubled slash like
+         * "/xref//goldfish/...". Trailing slashes should never appear
+         * here because every hit is a file, not a directory. */
+        var path = rawPath.charAt(0) === '/' ? rawPath.substring(1) : rawPath;
         var dir = path.substring(0, path.lastIndexOf('/')) || '';
         if (!groups[dir]) groups[dir] = [];
-        groups[dir].push({ path: path, hits: resultsMap[path] || [] });
+        groups[dir].push({ path: path, hits: resultsMap[rawPath] || [] });
       });
 
       var MAX_HITS_PER_CARD = 10;
@@ -762,7 +779,7 @@ main.container {
         groups[dir].forEach(function (entry) { totalHits += entry.hits.length; });
         html += '<div class="result-group-header">';
         if (dir) {
-          html += '<a href="' + window.contextPath + '/xref/' + encodeURIComponent(dir) + '">' + escapeHtml(dir) + '/</a>';
+          html += '<a href="' + window.contextPath + '/xref/' + encodePath(dir) + '">' + escapeHtml(dir) + '/</a>';
         } else {
           html += '<span class="group-root">（项目根）</span>';
         }
@@ -773,16 +790,16 @@ main.container {
           var hits = entry.hits;
           html += '<div class="result-file-card">';
           html += '<div class="result-file-header">';
-          html += '<a class="file-link" href="' + window.contextPath + '/xref/' + encodeURIComponent(entry.path) + '">' + escapeHtml(entry.path) + '</a>';
+          html += '<a class="file-link" href="' + window.contextPath + '/xref/' + encodePath(entry.path) + '">' + escapeHtml(entry.path) + '</a>';
           html += '<div class="file-actions">';
-          html += '<a class="action-btn" title="History" href="' + window.contextPath + '/history/' + encodeURIComponent(entry.path) + '"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></a>';
-          html += '<a class="action-btn" title="Annotate" href="' + window.contextPath + '/xref/' + encodeURIComponent(entry.path) + '?an=true"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></a>';
-          html += '<a class="action-btn" title="Download" href="' + window.contextPath + '/download/' + encodeURIComponent(entry.path) + '"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>';
+          html += '<a class="action-btn" title="History" href="' + window.contextPath + '/history/' + encodePath(entry.path) + '"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></a>';
+          html += '<a class="action-btn" title="Annotate" href="' + window.contextPath + '/xref/' + encodePath(entry.path) + '?an=true"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></a>';
+          html += '<a class="action-btn" title="Download" href="' + window.contextPath + '/download/' + encodePath(entry.path) + '"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>';
           html += '</div>';
           html += '</div>';
           hits.forEach(function (h, i) {
             var lineClass = (i >= MAX_HITS_PER_CARD) ? 'result-line result-line-overflow' : 'result-line';
-            var href = window.contextPath + '/xref/' + encodeURIComponent(entry.path) + '#L' + h.lineNumber;
+            var href = window.contextPath + '/xref/' + encodePath(entry.path) + '#L' + h.lineNumber;
             html += '<a class="' + lineClass + '" href="' + href + '">';
             html += '<span class="line-num">' + h.lineNumber + '</span>';
             html += '<span class="line-code">' + h.line + '</span>';
