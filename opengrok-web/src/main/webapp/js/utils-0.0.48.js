@@ -1363,7 +1363,7 @@ function init_searchable_option_list() {
          */
         $type.searchableOptionList({
             texts: {
-                searchplaceholder: 'Click here to restrict the file type'
+                searchplaceholder: 'input file type'
             },
             maxHeight: $type.offset().top + 'px',
             /**
