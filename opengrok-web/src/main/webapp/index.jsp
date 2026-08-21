@@ -156,6 +156,17 @@ main.container {
   color: var(--accent);
   font-weight: 500;
 }
+.results-header .result-meta-sep {
+  margin: 0 8px;
+  color: var(--border);
+}
+.results-header .result-meta {
+  color: var(--muted);
+}
+.results-header .result-meta strong {
+  color: var(--fg);
+  font-weight: 600;
+}
 
 /* ── Sort bar ── */
 .sort-bar {
@@ -851,6 +862,14 @@ main.container {
    * without re-querying the API. */
   var latestTotalCount = 0;
 
+  /* currentSort is the active Lucene SortOrder string ('relevancy' /
+   * 'lastmodtime' / 'fullpath'). The sort buttons live OUTSIDE the
+   * search form, so new FormData(sbox) cannot see them — every fetch
+   * must explicitly append `sort=currentSort` from this closure var.
+   * Default to 'relevancy' to match the controller's DEFAULT_SORT_ORDER
+   * (org.opengrok.web.api.v1.controller.SearchController). */
+  var currentSort = 'relevancy';
+
   window.changeSort = function (el) {
     var sortAttr = el.getAttribute('data-sort');
     var apiSort  = SORT_KEY_MAP[sortAttr] || 'relevancy';
@@ -859,19 +878,8 @@ main.container {
     el.classList.add('active');
     /* Changing sort resets the cursor to page 1 — same as the legacy
      * search.jsp which always re-issues the query from offset 0. */
+    currentSort  = apiSort;
     currentStart = 0;
-    if (!sbox) return;
-    var fd = new FormData(sbox);
-    var params = new URLSearchParams();
-    fd.forEach(function (v, k) {
-      if (typeof v === 'string' && v.length) {
-        var apiKey = FORM_TO_API_PARAM[k] || k;
-        params.append(apiKey, v);
-      }
-    });
-    var query = (fullInput && fullInput.value) ? fullInput.value.trim() : '';
-    if (query) params.set('full', query);
-    params.set('sort', apiSort);
     performInlineSearch();
   };
 
@@ -913,10 +921,22 @@ main.container {
     var totalPages   = Math.max(1, Math.ceil(resultCount / PAGE_SIZE));
     var currentPage  = Math.floor(startDocument / PAGE_SIZE) + 1;
 
+    /* Human-readable label for the active sort order. Mirrors SortOrder.getDesc()
+     * from org.opengrok.indexer.web.SortOrder so the wording stays consistent
+     * with the controller's accepted values. */
+    var SORT_LABELS = {
+      'relevancy':   '相关度',
+      'lastmodtime': '最后修改时间',
+      'fullpath':    '路径'
+    };
+    var sortLabel = SORT_LABELS[currentSort] || currentSort;
+
     resultsHeader.innerHTML =
       '命中 <strong>' + resultCount + '</strong> 条结果' +
       (filePaths.length > 0 ? '（' + displayStart + '\u2013' + displayEnd + '）' : '') +
-      (query ? '，查询 <span class="query-term">' + escapeHtml(query) + '</span>' : '');
+      (query ? '，查询 <span class="query-term">' + escapeHtml(query) + '</span>' : '') +
+      '<span class="result-meta-sep">·</span>' +
+      '<span class="result-meta">排序：<strong>' + escapeHtml(sortLabel) + '</strong></span>';
 
     renderPagination(currentPage, totalPages);
     bindPaginationClicks(paginationEl);
@@ -1019,6 +1039,10 @@ main.container {
     if (query) params.set('full', query);
     params.set('maxresults', String(PAGE_SIZE));
     if (currentStart > 0) params.set('start', String(currentStart));
+    /* Append the active Lucene sort order. The sort buttons are outside
+     * the search form, so we carry the value through the currentSort
+     * closure variable rather than relying on FormData(sbox). */
+    params.set('sort', currentSort);
     var url = (window.contextPath || '') + '/api/v1/search?' + params.toString();
     fetch(url, { headers: { 'Accept': 'application/json' } })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
