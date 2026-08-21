@@ -484,6 +484,46 @@ main.container {
   padding: 20px 0 8px;
 }
 
+/* The top pagination mirrors the bottom one. We render two bars (above
+ * the results-list and below the results-list) so the user can jump
+ * pages without scrolling. The page config (current / total / pageSize)
+ * is shared between them via renderPagination() in the inline script. */
+.pagination-top {
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.pagination-top:empty,
+.pagination:empty {
+  display: none;
+}
+
+.pagination-top .page-jump-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pagination-top .page-jump-hint input {
+  width: 56px;
+  height: 28px;
+  padding: 0 6px;
+  margin: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--fg);
+  background: var(--surface);
+  text-align: center;
+  outline: none;
+}
+
+.pagination-top .page-jump-hint input:focus {
+  border-color: var(--accent);
+}
+
 .page-btn {
   display: inline-flex;
   align-items: center;
@@ -640,24 +680,16 @@ main.container {
     </div>
 
     <div class="results-header" id="results-header"></div>
+
+    <%-- Top pagination bar — placed right above the results list so
+         it's visually adjacent to the data it paginates. The bottom
+         bar sits below the list. renderPagination() in the inline
+         script writes the same buttons into both #pagination-top and
+         #pagination, and empty containers collapse via CSS. --%>
+    <div class="pagination pagination-top" id="pagination-top"></div>
+
     <div class="results-list" id="results-list"></div>
-    <div class="pagination" id="pagination">
-      <button class="page-btn nav-btn" disabled>
-        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Previous
-      </button>
-      <button class="page-btn active">1</button>
-      <button class="page-btn">2</button>
-      <button class="page-btn">3</button>
-      <button class="page-btn">4</button>
-      <button class="page-btn">5</button>
-      <button class="page-btn">6</button>
-      <button class="page-btn">7</button>
-      <span class="page-ellipsis">…</span>
-      <button class="page-btn">100</button>
-      <button class="page-btn nav-btn">
-        Next <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>
-    </div>
+    <div class="pagination" id="pagination"></div>
   </section>
 
   <%-- Repository grid. --%>
@@ -675,17 +707,36 @@ main.container {
 /* <![CDATA[ */
 /* Inline search-results renderer + sort handler.
  *
+ * Pagination strategy mirrors the legacy `search.jsp` /
+ * `Util.createSlider` model: each API call requests a fixed Lucene
+ * document window (PAGE_SIZE = 25) via the `maxresults` parameter, the
+ * `start` parameter advances the offset for subsequent pages, and the
+ * total page count is derived from `resultCount` (total Lucene
+ * documents). The /api/v1/search response groups hits by file path so
+ * each page renders a handful of `.result-file-card` elements, but the
+ * page cursor lives in doc space — same as the legacy UI.
+ *
  * The chip / adv-toggle / ⌘K handlers live in menu.jspf; this script
  * coordinates with them via the shared #sbox, #full, #_menu-project-select
  * elements. */
 (function () {
+  var PAGE_SIZE = 25;
+  var MAX_PAGINATION_BUTTONS = 10;
   var sbox          = document.getElementById('sbox');
   var fullInput     = document.getElementById('full');
   var projectSelect = document.getElementById('_menu-project-select');
   var resultsSection = document.getElementById('results-section');
   var resultsHeader  = document.getElementById('results-header');
   var resultsList    = document.getElementById('results-list');
+  var paginationEl   = document.getElementById('pagination');
+  var paginationTop  = document.getElementById('pagination-top');
   var repoSection    = document.getElementById('repo-section');
+
+  /* `currentStart` mirrors the legacy SearchHelper#getStart() value:
+   * the 0-based Lucene document offset of the first hit on the
+   * currently displayed page. goToPage() converts a 1-based page
+   * number back into this offset before re-issuing the request. */
+  var currentStart = 0;
 
   var SORT_KEY_MAP = {
     'modified':  'lastmodtime',
@@ -698,12 +749,117 @@ main.container {
     'project': 'projects'
   };
 
+  /* computePageWindow mirrors the legacy Util.createSlider window
+   * algorithm: pick a contiguous run of up to MAX_PAGINATION_BUTTONS
+   * pages that contains `currentPage`, anchored near the start or end
+   * when currentPage is close to either boundary. This gives the same
+   * "1 2 3 4 5 6 7 ... 156" pattern as the old JSP. */
+  function computePageWindow(currentPage, lastPage) {
+    var first = 1;
+    var last  = lastPage;
+    if (lastPage > MAX_PAGINATION_BUTTONS) {
+      /* Try to centre the window around currentPage, but always keep
+       * a full MAX_PAGINATION_BUTTONS window where possible. */
+      var half = Math.floor(MAX_PAGINATION_BUTTONS / 2);
+      first = Math.max(1, currentPage - half);
+      last  = first + MAX_PAGINATION_BUTTONS - 1;
+      if (last > lastPage) {
+        last  = lastPage;
+        first = Math.max(1, last - MAX_PAGINATION_BUTTONS + 1);
+      }
+    }
+    return { first: first, last: last };
+  }
+
+  /* renderPagination writes the same Previous / page-number / Next bar
+   * into both the top and bottom containers. The two bars stay in sync
+   * by sharing `currentStart` via the closure and by re-rendering both
+   * containers from a single call. */
+  function renderPagination(currentPage, lastPage) {
+    if (lastPage <= 1) {
+      if (paginationEl)  paginationEl.innerHTML  = '';
+      if (paginationTop) paginationTop.innerHTML = '';
+      return;
+    }
+    var win = computePageWindow(currentPage, lastPage);
+    var html = '';
+    html += '<button class="page-btn nav-btn" type="button" data-page="prev"'
+          + (currentPage <= 1 ? ' disabled' : '') + '>'
+          + '<svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Previous</button>';
+
+    if (win.first > 1) {
+      html += '<button class="page-btn" type="button" data-page="1">1</button>';
+      if (win.first > 2) {
+        html += '<span class="page-ellipsis">…</span>';
+      }
+    }
+    for (var p = win.first; p <= win.last; p++) {
+      if (p === currentPage) {
+        html += '<button class="page-btn active" type="button" data-page="' + p + '">' + p + '</button>';
+      } else {
+        html += '<button class="page-btn" type="button" data-page="' + p + '">' + p + '</button>';
+      }
+    }
+    if (win.last < lastPage) {
+      if (win.last < lastPage - 1) {
+        html += '<span class="page-ellipsis">…</span>';
+      }
+      html += '<button class="page-btn" type="button" data-page="' + lastPage + '">' + lastPage + '</button>';
+    }
+
+    html += '<button class="page-btn nav-btn" type="button" data-page="next"'
+          + (currentPage >= lastPage ? ' disabled' : '') + '>'
+          + 'Next <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>';
+
+    if (paginationEl)  paginationEl.innerHTML  = html;
+    if (paginationTop) paginationTop.innerHTML = html;
+  }
+
+  /* Centralized page-click handler. Bound once on each container; uses
+   * data-page (a string: "prev"/"next" or a 1-based page number) to
+   * decide which offset to fetch. The handler relies on the closure
+   * variables currentStart and latestTotalCount (updated by every
+   * renderResults() call) so it never has to re-query the API to know
+   * which page is currently visible. */
+  function bindPaginationClicks(container) {
+    if (!container || container._pageBound) return;
+    container._pageBound = true;
+    container.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('[data-page]');
+      if (!btn || btn.disabled) return;
+      ev.preventDefault();
+      var attr = btn.getAttribute('data-page');
+      var totalPages = Math.max(1, Math.ceil(
+        (Number(latestTotalCount) || 0) / PAGE_SIZE));
+      var currentPage = Math.floor(currentStart / PAGE_SIZE) + 1;
+      var target;
+      if (attr === 'prev') {
+        target = Math.max(1, currentPage - 1);
+      } else if (attr === 'next') {
+        target = Math.min(totalPages, currentPage + 1);
+      } else {
+        target = parseInt(attr, 10);
+        if (!target || target < 1) return;
+      }
+      if (target === currentPage) return;
+      goToPage(target);
+    });
+  }
+
+  /* latestTotalCount is updated by every renderResults() call. The
+   * pagination click handler uses it (via closure) to compute totalPages
+   * without re-querying the API. */
+  var latestTotalCount = 0;
+
   window.changeSort = function (el) {
     var sortAttr = el.getAttribute('data-sort');
     var apiSort  = SORT_KEY_MAP[sortAttr] || 'relevancy';
     var opts = document.querySelectorAll('.sort-option');
     for (var i = 0; i < opts.length; i++) opts[i].classList.remove('active');
     el.classList.add('active');
+    /* Changing sort resets the cursor to page 1 — same as the legacy
+     * search.jsp which always re-issues the query from offset 0. */
+    currentStart = 0;
     if (!sbox) return;
     var fd = new FormData(sbox);
     var params = new URLSearchParams();
@@ -716,11 +872,7 @@ main.container {
     var query = (fullInput && fullInput.value) ? fullInput.value.trim() : '';
     if (query) params.set('full', query);
     params.set('sort', apiSort);
-    var url = (window.contextPath || '') + '/api/v1/search?' + params.toString();
-    fetch(url, { headers: { 'Accept': 'application/json' } })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (data) { renderResults(data, query); })
-      .catch(function () { if (sbox) sbox.submit(); });
+    performInlineSearch();
   };
 
   function escapeHtml(s) {
@@ -749,10 +901,26 @@ main.container {
     var resultsMap    = (data && data.results) ? data.results : {};
     var filePaths     = Object.keys(resultsMap);
 
+    latestTotalCount = resultCount;
+    currentStart     = startDocument;
+
+    /* The legacy search.jsp reports the result range 1-based ("Results
+     * 1 – 25 of 3886"). The /api/v1/search response returns 0-based
+     * document offsets, so add 1 here to keep the new UI aligned with
+     * the legacy wording. */
+    var displayStart = resultCount > 0 ? startDocument + 1 : 0;
+    var displayEnd   = endDocument + 1;
+    var totalPages   = Math.max(1, Math.ceil(resultCount / PAGE_SIZE));
+    var currentPage  = Math.floor(startDocument / PAGE_SIZE) + 1;
+
     resultsHeader.innerHTML =
       '命中 <strong>' + resultCount + '</strong> 条结果' +
-      (filePaths.length > 0 ? '（' + startDocument + '\u2013' + endDocument + '）' : '') +
+      (filePaths.length > 0 ? '（' + displayStart + '\u2013' + displayEnd + '）' : '') +
       (query ? '，查询 <span class="query-term">' + escapeHtml(query) + '</span>' : '');
+
+    renderPagination(currentPage, totalPages);
+    bindPaginationClicks(paginationEl);
+    bindPaginationClicks(paginationTop);
 
     var html = '';
     if (filePaths.length === 0) {
@@ -835,6 +1003,9 @@ main.container {
   }
 
   function performInlineSearch() {
+    /* Fetches a single 25-doc window starting at currentStart. Identical
+     * shape to the legacy Util.createSlider pipeline: maxresults=PAGE_SIZE
+     * (env hitsPerPage) plus a `start` offset for subsequent pages. */
     if (!sbox) return;
     var fd = new FormData(sbox);
     var params = new URLSearchParams();
@@ -846,6 +1017,8 @@ main.container {
     });
     var query = (fullInput && fullInput.value) ? fullInput.value.trim() : '';
     if (query) params.set('full', query);
+    params.set('maxresults', String(PAGE_SIZE));
+    if (currentStart > 0) params.set('start', String(currentStart));
     var url = (window.contextPath || '') + '/api/v1/search?' + params.toString();
     fetch(url, { headers: { 'Accept': 'application/json' } })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -853,9 +1026,23 @@ main.container {
       .catch(function () { if (sbox) sbox.submit(); });
   }
 
+  /* goToPage(page) converts a 1-based page number back to the 0-based
+   * Lucene document offset and re-issues the search. Bound to the page
+   * buttons via bindPaginationClicks(). */
+  function goToPage(page) {
+    var target = (page - 1) * PAGE_SIZE;
+    if (target < 0) target = 0;
+    currentStart = target;
+    performInlineSearch();
+  }
+  /* Expose goToPage on window so external scripts / future event hooks
+   * can drive the pager the same way. */
+  window.goToPage = goToPage;
+
   if (sbox) {
     sbox.addEventListener('submit', function (ev) {
       ev.preventDefault();
+      currentStart = 0;
       performInlineSearch();
     });
   }
@@ -863,6 +1050,7 @@ main.container {
     fullInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
+        currentStart = 0;
         performInlineSearch();
       }
     });
@@ -876,6 +1064,7 @@ main.container {
     if (!initialQuery || !initialQuery.trim()) return;
     if (!sbox || !fullInput) return;
     Promise.resolve().then(function () {
+      currentStart = 0;
       performInlineSearch();
       try {
         var cleanUrl = window.location.pathname + window.location.hash;
