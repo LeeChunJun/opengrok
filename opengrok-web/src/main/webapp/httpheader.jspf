@@ -49,7 +49,6 @@ org.opengrok.web.Scripts"%>
     String styleDir = _chromeHttpCfg.getCssDir();
     String httpCtxPath = request.getContextPath();
     String servletPath = request.getServletPath();
-    String dstyle = styleDir + '/' + "style-1.0.6.min.css";
     String pstyle = styleDir + '/' + "print-1.0.3.min.css";
     String mstyle = styleDir + '/' + "mandoc-1.0.0.min.css";
 
@@ -91,7 +90,6 @@ org.opengrok.web.Scripts"%>
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/jquery.tooltip.min.css" />
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/jquery.tablesorter.min.css" />
 <link rel="stylesheet" type="text/css" href="<%=styleDir%>/searchable-option-list-2.0.3.min.css" />
-<link rel="stylesheet" type="text/css" media="all" title="Default" href="<%= dstyle %>" />
 <link rel="alternate stylesheet" type="text/css" media="all" title="Paper White" href="<%= pstyle %>" />
 <link rel="stylesheet" type="text/css" href="<%= mstyle %>" media="all" />
 <link rel="stylesheet" type="text/css" href="<%= pstyle %>" media="print" />
@@ -118,7 +116,7 @@ if (_chromeHttpCfg.getPrefix().equals(Prefix.HIST_L)) {
 }
 %>
 
-<link rel="search" href="<%=httpCtxPath%>/opensearch"
+<link rel="search" href="<%=httpCtxPath%>/opensearch.jsp"
     type="application/opensearchdescription+xml"
     title="OpenGrok Search for current project(s)" />
 <script type="text/javascript">
@@ -136,14 +134,13 @@ if (_chromeHttpCfg.getPrefix().equals(Prefix.HIST_L)) {
 %>
 
 <style>
-/* ── UI refactor — shared chrome styles (loaded by every page that uses
- * mast.jsp + foot.jspf: list.jsp, history.jsp, more.jsp, search.jsp).
+/* ── UI refactor — global theme variables only.
  *
- * Defined here in httpheader.jspf so the CSS ships in the same <head> as
- * the legacy stylesheet links; the new chrome uses class selectors (
- * .common-page-header, .compact-nav, .dir-path, .common-page-footer)
- * that don't conflict with the legacy ID-based selectors
- * (#whole_header, #Masthead, #bar, #footer).
+ * Per-fragment chrome classes (.compact-nav / .nav-pill / .dir-path /
+ * .search-form / .search-group / .current-dir-label / .common-page-header
+ * / etc.) are defined by the jspf that renders them, so each fragment
+ * owns its own styles. That keeps chrome pieces independent and avoids
+ * silent overrides between head-loaded and body-loaded <style> blocks.
  */
 
 :root {
@@ -157,197 +154,6 @@ if (_chromeHttpCfg.getPrefix().equals(Prefix.HIST_L)) {
     --accent-dim: rgba(9,105,218,0.08);
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-}
-
-/* ── Page Header (pageheader.jspf) ── */
-.header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 32px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-.header-logo {
-    width: 28px; height: 28px;
-    background: var(--fg);
-    border-radius: 7px;
-    display: grid; place-items: center;
-    flex-shrink: 0;
-}
-.header-logo svg {
-    width: 14px; height: 14px;
-    stroke: #60a5fa; fill: none; stroke-width: 2.5;
-}
-.header-title {
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-}
-.header-title span { color: var(--muted); font-weight: 400; margin-left: 4px; }
-.header-link {
-    margin-left: auto;
-    font-size: 13px;
-    color: var(--muted);
-    text-decoration: none;
-    transition: color 0.12s;
-}
-.header-link:hover { color: var(--accent); }
-.header-link svg {
-    width: 14px; height: 14px;
-    stroke: currentColor; fill: none; stroke-width: 2;
-    vertical-align: -1px;
-    margin-right: 4px;
-}
-
-/* ── Compact Nav (mast.jsp + minisearch.jspf) ── */
-.compact-nav {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 8px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 13px;
-    gap: 12px;
-}
-.compact-nav-left { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.compact-nav-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.search-form { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.search-group {
-    display: flex; align-items: center;
-    border: 1px solid var(--border); border-radius: 6px;
-    overflow: hidden;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    flex-shrink: 0;
-}
-.search-group:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-dim);
-}
-.search-group .search-input-wrap { position: relative; display: flex; align-items: center; }
-.search-group .search-input-wrap svg {
-    position: absolute; left: 8px;
-    width: 14px; height: 14px;
-    stroke: var(--muted); fill: none; stroke-width: 2;
-    pointer-events: none;
-}
-.search-group .search-input {
-    width: 170px; height: 30px;
-    border: none;
-    padding: 0 8px 0 28px;
-    font-size: 12.5px;
-    font-family: var(--font-sans);
-    outline: none; background: transparent;
-    flex-shrink: 0;
-}
-.search-group .search-btn {
-    display: inline-flex; align-items: center;
-    height: 30px; padding: 0 14px;
-    border: none;
-    border-left: 1px solid var(--border);
-    border-radius: 0 5px 5px 0;
-    background: var(--bg); color: var(--fg);
-    font-size: 12.5px; font-weight: 500;
-    font-family: var(--font-sans);
-    cursor: pointer;
-    transition: background 0.12s;
-    white-space: nowrap;
-}
-.search-group .search-btn:hover { background: #f3f4f6; }
-.search-btn-icon { display: none; }
-.current-dir-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12.5px;
-    color: var(--muted);
-    cursor: pointer;
-    user-select: none;
-    padding: 4px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    transition: background 0.12s;
-    flex-shrink: 0;
-    white-space: nowrap;
-    height: 30px;
-    box-sizing: border-box;
-}
-.current-dir-label:hover { background: #f6f8fa; }
-.current-dir-label input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
-.nav-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 14px;
-    border-radius: 6px;
-    color: var(--fg);
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 13px;
-    transition: background 0.12s, color 0.12s;
-}
-.nav-pill:hover { background: var(--accent-dim); color: var(--accent); }
-.nav-pill.active { background: var(--accent); color: #fff; cursor: default; }
-.nav-pill.active:hover { background: var(--accent); color: #fff; }
-.nav-pill svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
-
-/* ── Path breadcrumb (mast.jsp) ── */
-.dir-path {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 6px 24px;
-    font-size: 13px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    overflow-x: auto;
-    flex-wrap: wrap;
-}
-.dir-path a { color: var(--accent); text-decoration: none; white-space: nowrap; }
-.dir-path a:hover { text-decoration: underline; }
-.dir-path .path-sep { color: var(--border); flex-shrink: 0; }
-.dir-path .path-current { color: var(--fg); font-weight: 500; white-space: nowrap; }
-
-
-/* ── Container (mast.jsp opens, foot.jspf closes) ── */
-main.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-
-/* ── Responsive — Tablet / Mobile ── */
-@media (max-width: 768px) {
-    .compact-nav { padding: 8px 16px; }
-    main.container { padding: 16px; }
-}
-@media (max-width: 600px) {
-    .nav-label, .dir-label, .search-label { display: none; }
-    .header { padding: 8px 12px; }
-    .header-title { font-size: 14px; }
-    .header-link { display: none; }
-    .compact-nav { padding: 6px 12px; gap: 6px; flex-wrap: nowrap; }
-    .compact-nav-left { gap: 2px; flex-shrink: 0; flex-wrap: nowrap; }
-    .nav-pill { padding: 6px; border-radius: 6px; gap: 0; }
-    .nav-pill svg { width: 16px; height: 16px; }
-    .compact-nav-right { gap: 6px; flex-shrink: 0; min-width: 0; }
-    .search-form { gap: 6px; min-width: 0; }
-    .search-group { flex: 1; min-width: 0; }
-    .search-group .search-input { width: 70px; min-width: 0; font-size: 12px; }
-    .search-group .search-btn { padding: 0 8px; gap: 0; }
-    .search-btn-icon { display: block; width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
-    .current-dir-label { font-size: 0; padding: 5px; gap: 0; height: auto; }
-    .current-dir-label input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
-    .dir-path { padding: 5px 12px; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-wrap: nowrap; }
-}
-@media (max-width: 380px) {
-    .search-group .search-input-wrap { display: none; }
-    .search-group .search-btn {
-        border-radius: 6px;
-        border: 1px solid var(--border);
-        padding: 6px;
-    }
-    .search-btn-icon { width: 16px; height: 16px; stroke: var(--fg); }
-    .current-dir-label { padding: 4px; }
-    .current-dir-label input[type="checkbox"] { width: 18px; height: 18px; }
 }
 </style>
 </head>
