@@ -16,11 +16,14 @@ information: Portions Copyright [yyyy] [name of copyright owner]
 
 CDDL HEADER END
 
-Copyright (c) 2015, 2025, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2015, 2026, Oracle and/or its affiliates. All rights reserved.
 Portions Copyright 2011 Jens Elkner.
 Portions Copyright (c) 2017-2020, Chris Fraire <cfraire@me.com>.
+Portions Copyright (c) 2026, UI Refactor.
 --%>
-<%@page errorPage="error.jsp" import="
+
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<%@ page errorPage="error.jsp" import="
 java.io.BufferedInputStream,
 java.io.File,
 java.io.FileInputStream,
@@ -39,52 +42,73 @@ org.opengrok.indexer.history.Annotation,
 org.opengrok.indexer.history.HistoryGuru,
 org.opengrok.indexer.util.ObjectPool,
 org.opengrok.indexer.util.IOUtils,
-org.opengrok.indexer.web.QueryParameters"
-%>
-<%@ page import="org.opengrok.indexer.web.Util" %>
+org.opengrok.indexer.web.QueryParameters,
+org.opengrok.indexer.web.Util,
+org.opengrok.web.PageConfig"%>
 <%@ page import="static org.opengrok.web.PageConfig.DUMMY_REVISION" %>
-<%
-    /* ---------------------- xref.jspf start --------------------- */
-{
-    // requesting a previous revision or needed to generate xref on the fly
-    // (either economy mode is enabled or the cfg.findDataFile() call failed).
-    AnalyzerFactory a = AnalyzerGuru.find(basename);
-    Genre g = AnalyzerGuru.getGenre(a);
-    String error = null;
 
-    if (g == Genre.PLAIN || g == Genre.HTML || g == null) {
-        InputStream in = null;
-        File tempf = null;
+<%
+/* ---------------------- xref.jspf start ---------------------
+ *
+ * Xref renderer. Included by list.jsp (and other pages that need
+ * to render the cross-reference view of a file). Produces one of:
+ *   - <div id="src">…</div> with the rendered Xref / image / HTML
+ *   - <h3 class="error">…</h3> + error <p> when reading fails
+ *
+ * The helper relies on a number of already-declared variables in
+ * the calling page's _jspService scope:
+ *   LOGGER, basename, rev, resourceFile, rawPath, project
+ *   r  (declared as InputStreamReader, may be assigned below)
+ *
+ * The PageConfig is obtained here as `xrefCfg` so that this fragment
+ * compiles both in Jetty JSPC pre-compilation (where the fragment is
+ * compiled as a stand-alone JSP and `cfg` is not in scope) and at
+ * runtime under a static include directive. Calling
+ * PageConfig.get(request) is cached, so this is safe even if the
+ * calling page already obtained its own PageConfig under a different
+ * name (e.g. list.jsp's `_chromeListCfg`).
+ */
+PageConfig xrefCfg = PageConfig.get(request);
+{
+    /* Requesting a previous revision or needed to generate xref on the fly
+     * (either economy mode is enabled or the cfg.findDataFile() call failed). */
+    AnalyzerFactory _xrefA = AnalyzerGuru.find(basename);
+    Genre _xrefG = AnalyzerGuru.getGenre(_xrefA);
+    String _xrefError = null;
+
+    if (_xrefG == Genre.PLAIN || _xrefG == Genre.HTML || _xrefG == null) {
+        InputStream _xrefIn = null;
+        File _xrefTempf = null;
         try {
             if (rev.isBlank() || rev.equals(DUMMY_REVISION)) {
-                in = new BufferedInputStream(new FileInputStream(resourceFile));
+                _xrefIn = new BufferedInputStream(new FileInputStream(resourceFile));
             } else {
-                tempf = File.createTempFile("ogtags", basename);
-                if (HistoryGuru.getInstance().getRevision(tempf, resourceFile.getParent(), basename, rev)) {
-                    in = new BufferedInputStream(new FileInputStream(tempf));
+                _xrefTempf = File.createTempFile("ogtags", basename);
+                if (HistoryGuru.getInstance().getRevision(_xrefTempf, resourceFile.getParent(), basename, rev)) {
+                    _xrefIn = new BufferedInputStream(new FileInputStream(_xrefTempf));
                 } else {
-                    LOGGER.log(Level.WARNING, "failed to retrieve history contents of ''{0}'' in revision {1}",
+                    LOGGER.log(Level.WARNING, "failed to retrieve history contents of {0} in revision {1}",
                             new Object[]{resourceFile, rev});
-                    tempf.delete();
-                    tempf = null;
+                    _xrefTempf.delete();
+                    _xrefTempf = null;
                 }
             }
         } catch (Exception e) {
-            // fall through to error message
-            error = e.getMessage();
-            if (tempf != null) {
-                tempf.delete();
-                tempf = null;
+            /* Fall through to error message. */
+            _xrefError = e.getMessage();
+            if (_xrefTempf != null) {
+                _xrefTempf.delete();
+                _xrefTempf = null;
             }
         }
 
-        if (in != null) {
+        if (_xrefIn != null) {
             try {
-                if (g == null) {
-                    a = AnalyzerGuru.find(in, basename);
-                    g = AnalyzerGuru.getGenre(a);
+                if (_xrefG == null) {
+                    _xrefA = AnalyzerGuru.find(_xrefIn, basename);
+                    _xrefG = AnalyzerGuru.getGenre(_xrefA);
                 }
-                if (g == AbstractAnalyzer.Genre.DATA || g == AbstractAnalyzer.Genre.XREFABLE || g == null) {
+                if (_xrefG == AbstractAnalyzer.Genre.DATA || _xrefG == AbstractAnalyzer.Genre.XREFABLE || _xrefG == null) {
 %>
 <div id="src">
     Download binary file, <a href="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %>
@@ -94,19 +118,19 @@ org.opengrok.indexer.web.QueryParameters"
 %>
 <div id="src">
         <pre><%
-                    if (g == AbstractAnalyzer.Genre.PLAIN) {
-                        Definitions defs = null;
-                        ObjectPool<Ctags> ctagsPool = cfg.getEnv().getIndexerParallelizer().getCtagsPool();
-                        int tries = 2;
-                        while (cfg.getEnv().isWebappCtags() && tempf != null) {
-                            Ctags ctags = ctagsPool.get();
+                    if (_xrefG == AbstractAnalyzer.Genre.PLAIN) {
+                        Definitions _xrefDefs = null;
+                        ObjectPool<Ctags> _xrefCtagsPool = xrefCfg.getEnv().getIndexerParallelizer().getCtagsPool();
+                        int _xrefTries = 2;
+                        while (xrefCfg.getEnv().isWebappCtags() && _xrefTempf != null) {
+                            Ctags _xrefCtags = _xrefCtagsPool.get();
                             try {
-                                ctags.setTabSize(project != null ?
+                                _xrefCtags.setTabSize(project != null ?
                                 project.getTabSize() : 0);
-                                defs = ctags.doCtags(tempf.getPath());
+                                _xrefDefs = _xrefCtags.doCtags(_xrefTempf.getPath());
                                 break;
                             } catch (InterruptedException ex) {
-                                if (--tries > 0) {
+                                if (--_xrefTries > 0) {
                                     LOGGER.log(Level.WARNING, "doCtags() interrupted--{0}",
                                     ex.getMessage());
                                     continue;
@@ -117,28 +141,28 @@ org.opengrok.indexer.web.QueryParameters"
                                 LOGGER.log(Level.WARNING, "doCtags()", ex);
                                 break;
                             } finally {
-                                ctags.reset();
-                                ctagsPool.release(ctags);
+                                _xrefCtags.reset();
+                                _xrefCtagsPool.release(_xrefCtags);
                             }
                         }
-                        Annotation annotation = cfg.getAnnotation();
-                        //not needed yet
-                        //annotation.writeTooltipMap(out);
-                        // The data under source root is read with UTF-8 as a default.
-                        r = IOUtils.createBOMStrippedReader(in, StandardCharsets.UTF_8.name());
+                        Annotation _xrefAnnotation = xrefCfg.getAnnotation();
+                        /* Not needed yet. */
+                        /* _xrefAnnotation.writeTooltipMap(out); */
+                        /* The data under source root is read with UTF-8 as a default. */
+                        r = IOUtils.createBOMStrippedReader(_xrefIn, StandardCharsets.UTF_8.name());
                         AnalyzerGuru.writeDumpedXref(request.getContextPath(),
-                            a, r, out,
-                            defs, annotation, project, resourceFile);
-                    } else if (g == AbstractAnalyzer.Genre.IMAGE) {
+                            _xrefA, r, out,
+                            _xrefDefs, _xrefAnnotation, project, resourceFile);
+                    } else if (_xrefG == AbstractAnalyzer.Genre.IMAGE) {
         %></pre>
     <img src="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %><%= Util.uriEncode(rev) %>" alt="from Source Repository"/>
     <pre><%
-                    } else if (g == AbstractAnalyzer.Genre.HTML) {
+                    } else if (_xrefG == AbstractAnalyzer.Genre.HTML) {
                         /*
                          * For backward compatibility, read the OpenGrok-produced document
                          * using the system default charset.
                          */
-                        r = new InputStreamReader(in);
+                        r = new InputStreamReader(_xrefIn);
                         /*
                          * dumpXref() is also useful here for translating links.
                          */
@@ -153,14 +177,14 @@ org.opengrok.indexer.web.QueryParameters"
             } finally {
                 if (r != null) {
                     IOUtils.close(r);
-                    in = null;
+                    _xrefIn = null;
                 }
-                if (in != null) {
-                    IOUtils.close(in);
-                    in = null;
+                if (_xrefIn != null) {
+                    IOUtils.close(_xrefIn);
+                    _xrefIn = null;
                 }
-                if (tempf != null) {
-                    tempf.delete();
+                if (_xrefTempf != null) {
+                    _xrefTempf.delete();
                 }
             }
     %></pre>
@@ -168,12 +192,12 @@ org.opengrok.indexer.web.QueryParameters"
         } else {
 %>
 <h3 class="error">Error reading file</h3><%
-            if (error != null) {
+            if (_xrefError != null) {
 %>
-<p class="error"><%= Util.htmlize(error) %></p><%
+<p class="error"><%= Util.htmlize(_xrefError) %></p><%
             }
         }
-    } else if (g == AbstractAnalyzer.Genre.IMAGE) {
+    } else if (_xrefG == AbstractAnalyzer.Genre.IMAGE) {
 %>
 <div id="src">
     <img src="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %><%= Util.uriEncode(rev) %>"
