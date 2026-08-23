@@ -248,3 +248,22 @@ org.opengrok.indexer.web.Util"%>
         <span class="dir-label">current directory</span>
     </label>
 </form>
+<script type="text/javascript">
+/* <![CDATA[ */
+    /* Wire the minisearch autocomplete / suggestion dropdown.
+     *
+     * domReadyMenu(true) — defined in utils-0.0.48.js — fetches
+     * /api/v1/suggest/config and, when the suggester is enabled,
+     * calls initMinisearchAutocomplete(config). That attaches a
+     * jQuery UI autocomplete widget to:
+     *     #search             the search input (id matches)
+     *     #minisearch-project the hidden project field
+     *     #minisearch-path    the "current directory" checkbox
+     * All three ids are preserved on the inputs above.
+     *
+     * The previous chrome used a legacy form <ul><li> layout where
+     * minisearch.jspf registered this hook inline. We replicate
+     * that here so the dropdown keeps working after the refactor. */
+    document.domReady.push(function() { domReadyMenu(true); });
+/* ]]> */
+</script>
