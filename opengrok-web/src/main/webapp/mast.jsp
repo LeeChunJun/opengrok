@@ -30,13 +30,8 @@ org.opengrok.indexer.web.Prefix,
 org.opengrok.indexer.configuration.Project"%>
 
 <style>
-:root {
-  --surface:   #ffffff;
-  --border:    #d0d7de;
-  --fg:        #24292f;
-  --accent:    #0969da;
-  --accent-dim: rgba(9,105,218,0.08);
-}
+/* Theme variables come from httpheader.jspf (<head>); this fragment
+ * (rendered inside <body>) only contributes chrome-specific rules. */
 
 .compact-nav {
   background: var(--surface);

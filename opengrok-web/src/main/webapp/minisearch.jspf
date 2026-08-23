@@ -31,21 +31,17 @@ org.opengrok.indexer.web.QueryParameters,
 org.opengrok.indexer.web.Util"%>
 
 <style>
-:root {
-    --border:    #d0d7de;
-    --accent:    #0969da;
-    --accent-dim: rgba(9,105,218,0.08);
-    --muted:     #57606a;
-    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
-    --bg:        #f6f8fa;
-    --fg:        #24292f;
-}
+/* Theme variables come from httpheader.jspf (<head>); this fragment
+ * (rendered inside <body>) only contributes search-specific rules.
+ * margin: 0; // 覆盖 <form> 浏览器默认的 margin-block-end: 1em;
+ */
 
 .search-form {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    margin: 0;
 }
 
 .search-group {
@@ -145,6 +141,7 @@ org.opengrok.indexer.web.Util"%>
 @media(max-width: 600px) {
     .search-form {
         gap: 6px; min-width: 0;
+        margin: 0;
     }
 
     .search-group {

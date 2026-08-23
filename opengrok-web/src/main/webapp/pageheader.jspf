@@ -29,13 +29,11 @@ org.opengrok.indexer.configuration.Project,
 org.opengrok.web.PageConfig" %>
 
 <style>
-:root {
-  --surface:   #ffffff;
-  --border:    #d0d7de;
-  --fg:        #24292f;
-  --muted:     #57606a;
-  --accent:    #0969da;
-}
+/* Theme variables (--bg / --surface / --fg / --muted / --border /
+ * --border-light / --accent / --accent-dim / --font-sans / --font-mono)
+ * are defined in httpheader.jspf, which is included from <head> and
+ * therefore loads before this body-side <style> block. Re-declaring
+ * them here would only duplicate bytes. */
 
 /* 为页首区域（common-page-header）设置样式 */
 .common-page-header {
