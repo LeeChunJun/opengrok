@@ -22,7 +22,8 @@ Portions Copyright (c) 2026, UI Refactor.
 --%>
 
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
-<%@ page session="false" errorPage="error.jsp" import="
+<%@ page session="false" errorPage="error.jsp" buffer="64kb" autoFlush="false" %>
+<%@ page import="
 org.opengrok.indexer.configuration.Project,
 org.opengrok.web.PageConfig,
 org.opengrok.indexer.web.Prefix,
