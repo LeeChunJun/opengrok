@@ -46,21 +46,23 @@ org.opengrok.indexer.configuration.Project"%>
   color: var(--muted);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 4px 12px;
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 
-/* Left side of the row: Home / project / subpath. Long paths shrink
- * and ellipsize rather than push the revision tag off-screen. */
+/* Left side of the row: Home / project / subpath. Long paths wrap
+ * to a new line instead of being truncated, so the full breadcrumb
+ * remains visible and never overlaps the revision tag. */
 .dir-path-main {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   flex: 1 1 auto;
+  flex-wrap: wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 /* Right side: revision tag. flex-shrink:0 keeps the hash on screen
@@ -111,13 +113,17 @@ org.opengrok.indexer.configuration.Project"%>
     .dir-path {
         padding: 5px 12px;
         font-size: 11.5px;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
     }
     .dir-path-main {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        min-width: 0;
+        flex: 1 1 100%;
+        flex-wrap: wrap;
+        word-break: break-all;
+        overflow-wrap: anywhere;
+    }
+    .dir-path-revision {
+        flex: 1 1 100%;
+        justify-content: flex-end;
     }
 }
 </style>
@@ -216,7 +222,7 @@ org.opengrok.indexer.configuration.Project"%>
     </div>
     <% if (_chromeRevVisible) { %>
     <div class="dir-path-revision">
-    <span class="revision" title="<%= Util.htmlize(_chromeRevTitleAttr) %>"><%= Util.htmlize(_chromeRevLabel) %> <span><%= Util.htmlize(_chromeRevShort) %></span></span>
+    <span class="revision" title="<%= Util.htmlize(_chromeRevTitleAttr) %>"><%= Util.htmlize(_chromeRevLabel) %> <span><%= Util.htmlize(_chromeRev) %></span></span>
     </div>
     <% } %>
 </nav>
