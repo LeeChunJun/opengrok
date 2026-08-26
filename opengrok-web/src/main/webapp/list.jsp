@@ -184,6 +184,7 @@ org.opengrok.web.PageConfig"%>
 /* Page-level container width — explicit re-declaration so the file
  * table stays centered at max 1200px even if the chrome stylesheet
  * changes in the future. Mirrors main.container from httpheader.jspf. */
+body { background: var(--bg); }
 main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: border-box; }
 @media (max-width: 768px) { main.container { padding: 16px; } }
 
@@ -337,15 +338,15 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
 }
 .code-area a.l {
     display: inline-block;
-    width: 50px;
-    min-width: 50px;
+    width: 36px;
+    min-width: 36px;
     text-align: right;
-    padding-right: 12px;
+    padding: 0 8px 0 0;
     margin-right: 8px;
     color: var(--muted);
     user-select: none;
     text-decoration: none;
-    font-size: 12.5px;
+    font-size: 11px;
     border-right: 1px solid var(--border-light);
 }
 .code-area a.l:hover { color: var(--accent); }
@@ -407,6 +408,146 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
     .code-area pre { padding: 0 12px; font-size: 12px; }
     .code-area a.l { width: 40px; min-width: 40px; padding-right: 6px; margin-right: 4px; }
 }
+
+/* ── Directory listing readme preview (markdown) ──
+ *
+ * Markdown readme (e.g. README.md) → ".readme-paper" + ".markdown"
+ * A "paper" card with a title strip (filename + download link) and a
+ * soft shadow so it reads as a sheet on top of the page. The rendered
+ * markdown sits inside the card body. Plain-text readme files are
+ * intentionally not previewed here — only the markdown flavour is.
+ *
+ * The styles use only theme variables (defined in httpheader.jspf) so
+ * they blend with the rest of the directory listing. */
+.readme-paper {
+    margin-top: 20px;
+    background: #ffffff;
+    border: 1px solid #e3e6eb;
+    border-radius: 10px;
+    box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.04),
+        0 6px 18px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+}
+.readme-paper-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e9ecef;
+    background: #fafbfc;
+}
+.readme-paper-header .readme-name {
+    font-weight: 600;
+    color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.01em;
+}
+.readme-paper-header .readme-name::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: #4b8bf4;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+    transform: translateY(-1px);
+}
+.readme-paper-header .readme-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.readme-paper-header .readme-actions a {
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    transition: background 0.12s, border-color 0.12s;
+}
+.readme-paper-header .readme-actions a:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+}
+.readme-paper-body {
+    padding: 22px 28px 26px;
+    color: #2f3640;
+    font-size: 14px;
+    line-height: 1.7;
+    background: #ffffff;
+}
+/* Markdown content typography, scoped to .readme-paper-body so it
+ * doesn't leak into other parts of the page. */
+.readme-paper-body h1,
+.readme-paper-body h2,
+.readme-paper-body h3,
+.readme-paper-body h4,
+.readme-paper-body h5,
+.readme-paper-body h6 {
+    margin: 1.1em 0 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--fg);
+}
+.readme-paper-body h1 { font-size: 1.6em; border-bottom: 1px solid #e6e8eb; padding-bottom: 0.3em; }
+.readme-paper-body h2 { font-size: 1.35em; border-bottom: 1px solid #e6e8eb; padding-bottom: 0.25em; }
+.readme-paper-body h3 { font-size: 1.15em; }
+.readme-paper-body h4 { font-size: 1.05em; }
+.readme-paper-body p { margin: 0.6em 0; }
+.readme-paper-body a { color: var(--accent); text-decoration: none; }
+.readme-paper-body a:hover { text-decoration: underline; }
+.readme-paper-body ul,
+.readme-paper-body ol { padding-left: 1.6em; margin: 0.5em 0; }
+.readme-paper-body li { margin: 0.2em 0; }
+.readme-paper-body code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: #f3f5f8;
+    border: 1px solid #e6e9ee;
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: #c0392b;
+}
+.readme-paper-body pre {
+    background: #f7f8fa;
+    border: 1px solid #e6e9ee;
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    line-height: 1.55;
+}
+.readme-paper-body pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+}
+.readme-paper-body blockquote {
+    margin: 0.8em 0;
+    padding: 6px 14px;
+    border-left: 3px solid #c8d1da;
+    color: #57606a;
+    background: #fafbfc;
+    border-radius: 0 4px 4px 0;
+}
+.readme-paper-body img { max-width: 100%; height: auto; }
+.readme-paper-body table {
+    border-collapse: collapse;
+    margin: 0.6em 0;
+    width: auto;
+}
+.readme-paper-body th,
+.readme-paper-body td {
+    border: 1px solid #e3e6eb;
+    padding: 6px 10px;
+    text-align: left;
+}
+.readme-paper-body th { background: #f6f8fa; font-weight: 600; }
+.readme-paper-body hr { border: 0; border-top: 1px solid #e6e8eb; margin: 1.2em 0; }
 </style>
 <%
 /* ---------------------- list.jsp body --------------------- */
@@ -476,7 +617,7 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
                     <td class="file-size" data-label="大小">—</td>
                     <td class="file-lines" data-label="行数">—</td>
                     <td class="file-loc" data-label="LOC">—</td>
-                    <td class="file-actions" data-label="操作"></td>
+                    <td class="file-actions" data-label="操作">—</td>
                 </tr><%
                 }
                 for (DirectoryEntry entry : entries) {
@@ -566,18 +707,20 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
             for (int i = 0; i < catfiles.length; i++) {
                 if (catfiles[i] == null) continue;
                 String lcName = readMes.get(i).toLowerCase(Locale.ROOT);
+                String readmeName = readMes.get(i);
+                String readmeDownloadHref = ctxPath + Prefix.DOWNLOAD_P + Util.uriEncodePath(path + readmeName);
                 if (lcName.endsWith(".md") || lcName.endsWith(".markdown")) { %>
-    <div id="src<%=i%>" data-markdown>
-        <div class="markdown-heading"><h3><%= readMes.get(i) %></h3></div>
-        <div class="markdown-content"
-             data-markdown-download="<%= ctxPath + Prefix.DOWNLOAD_P + Util.uriEncodePath(path + readMes.get(i)) %>"></div>
-        <pre data-markdown-original><% Util.dump(out, catfiles[i], catfiles[i].getName().endsWith(".gz")); %></pre><% out.flush(); %>
-    </div><%
-                } else { %>
-    <h3><%= readMes.get(i) %></h3>
-    <div id="src<%=i%>">
-        <pre><% Util.dump(out, catfiles[i], catfiles[i].getName().endsWith(".gz")); %></pre><% out.flush(); %>
-    </div><%
+    <section id="src<%=i%>" class="readme-paper" data-markdown>
+        <header class="readme-paper-header">
+            <span class="readme-name"><%= readmeName %></span>
+            <span class="readme-actions">
+                <a href="<%= readmeDownloadHref %>" title="Download raw file">Download</a>
+            </span>
+        </header>
+        <div class="readme-paper-body">
+            <div class="markdown-content" data-markdown-download="<%= readmeDownloadHref %>"></div>
+        </div>
+    </section><%
                 }
             }
         }
@@ -656,14 +799,14 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
             <pre><% Util.dumpXref(out, xrefFile, xrefFile.getName().endsWith(".gz"), ctxPath); %></pre><% out.flush(); %><%
                     }
                 } else { %>
-            <pre><%@ include file="/xref.jspf" %></pre><% out.flush(); %><%
+            <%@ include file="/xref.jspf" %><% out.flush(); %><%
                 }
             } else {
                 File xrefFile = _chromeListCfg.findDataFile();
                 if (xrefFile != null) { %>
             <pre><% Util.dumpXref(out, xrefFile, xrefFile.getName().endsWith(".gz"), ctxPath); %></pre><% out.flush(); %><%
                 } else { %>
-            <pre><%@ include file="/xref.jspf" %></pre><% out.flush(); %><%
+            <%@ include file="/xref.jspf" %><% out.flush(); %><%
                 }
             }
         %>

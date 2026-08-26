@@ -47,6 +47,100 @@ org.opengrok.indexer.web.Util,
 org.opengrok.web.PageConfig"%>
 <%@ page import="static org.opengrok.web.PageConfig.DUMMY_REVISION" %>
 
+<style>
+/* ── xref "paper" wrapper ──
+ *
+ * xref.jspf emits <div id="src" class="xref-paper">…</div>. list.jsp
+ * (code-view branch) used to wrap the include in a plain <pre>, which
+ * is invalid HTML for a <div> child. The wrap is gone now (see the
+ * code-view block below) and the .xref-paper class carries the entire
+ * surface styling — border, shadow, monospace, line-number gutter,
+ * etc. Styles here therefore only need to style the wrapper itself
+ * plus its <pre> child. */
+.xref-paper {
+    background: var(--surface);
+    border: 1px solid #e3e6eb;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+}
+.xref-paper-inner { padding: 4px 0; }
+.xref-paper-binary .xref-paper-inner {
+    padding: 28px 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+}
+.xref-paper-binary .xref-paper-inner a { color: var(--accent); }
+.xref-paper-image .xref-paper-inner {
+    padding: 24px;
+    text-align: center;
+    background: #f6f8fa;
+}
+.xref-paper-image .xref-paper-inner img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+/* Inner dumped-xref <pre> — same look as the readme preview gutter so
+ * the code view and the readme preview read as one component family. */
+.xref-paper pre {
+    margin: 0;
+    padding: 12px 0;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #2f3640;
+    white-space: pre;
+    background: #fbfcfd;
+}
+.xref-paper pre a.l {
+    display: inline-block;
+    width: 36px;
+    min-width: 36px;
+    text-align: right;
+    padding: 0 10px 0 0;
+    margin-right: 10px;
+    color: #9aa4b1;
+    background: #f3f5f8;
+    border-right: 1px solid #e6e9ee;
+    user-select: none;
+    text-decoration: none;
+    font-size: 11.5px;
+}
+.xref-paper pre a.l:hover { color: var(--accent); }
+.xref-paper pre a { color: var(--accent); text-decoration: none; }
+.xref-paper pre a:hover { text-decoration: underline; }
+.xref-paper pre .hl { color: var(--accent); background: var(--accent-dim); }
+
+/* xref error block (emitted by xref.jspf when reading fails). Pairs
+ * with the .xref-paper card style so the error state visually matches
+ * the success state instead of looking like raw browser text. */
+.xref-error {
+    background: #fff5f5;
+    border: 1px solid #f3c2c2;
+    border-left: 3px solid #cf222e;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    color: #6b1f1f;
+}
+.xref-error h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #cf222e;
+}
+.xref-error p.error {
+    margin: 0;
+    font-size: 12.5px;
+    font-family: var(--font-mono);
+    color: #6b1f1f;
+    white-space: pre-wrap;
+}
+</style>
+
 <%
 /* ---------------------- xref.jspf start ---------------------
  *
@@ -75,6 +169,9 @@ PageConfig xrefCfg = PageConfig.get(request);
     AnalyzerFactory _xrefA = AnalyzerGuru.find(basename);
     Genre _xrefG = AnalyzerGuru.getGenre(_xrefA);
     String _xrefError = null;
+    /* xref-paper class is applied to each emitted <div id="src"> so the
+     * theme-aware "paper" styles in list.jsp can target the rendered
+     * cross-reference view consistently with the readme previews. */
 
     if (_xrefG == Genre.PLAIN || _xrefG == Genre.HTML || _xrefG == null) {
         InputStream _xrefIn = null;
@@ -110,13 +207,15 @@ PageConfig xrefCfg = PageConfig.get(request);
                 }
                 if (_xrefG == AbstractAnalyzer.Genre.DATA || _xrefG == AbstractAnalyzer.Genre.XREFABLE || _xrefG == null) {
 %>
-<div id="src">
+<div id="src" class="xref-paper xref-paper-binary">
+    <div class="xref-paper-inner">
     Download binary file, <a href="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %>
 <%= Util.uriEncode(rev) %>"><%= basename %></a>
+    </div>
 </div><%
                 } else {
 %>
-<div id="src">
+<div id="src" class="xref-paper">
         <pre><%
                     if (_xrefG == AbstractAnalyzer.Genre.PLAIN) {
                         Definitions _xrefDefs = null;
@@ -188,26 +287,34 @@ PageConfig xrefCfg = PageConfig.get(request);
                 }
             }
     %></pre>
+    </div>
 </div><%
         } else {
 %>
+<div class="xref-error">
 <h3 class="error">Error reading file</h3><%
             if (_xrefError != null) {
 %>
 <p class="error"><%= Util.htmlize(_xrefError) %></p><%
             }
+%>
+</div><%
         }
     } else if (_xrefG == AbstractAnalyzer.Genre.IMAGE) {
 %>
-<div id="src">
+<div id="src" class="xref-paper xref-paper-image">
+    <div class="xref-paper-inner">
     <img src="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %><%= Util.uriEncode(rev) %>"
          alt="from Source Repository"/>
+    </div>
 </div><%
     } else {
 %>
-<div id="src">
+<div id="src" class="xref-paper xref-paper-binary">
+    <div class="xref-paper-inner">
     Download binary file, <a href="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %>
 <%= Util.uriEncode(rev) %>"><%= basename %></a>
+    </div>
 </div><%
     }
 }
