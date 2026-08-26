@@ -1514,7 +1514,7 @@ function init_markdown_converter() {
                         mimeType: 'text/plain'
                     }).done(function (payload) {
                         $dataMarkdownDownloadEl.html(filterXSS(converter.makeHtml(payload))).show();
-                        $that.addClass('markdown').find('[data-markdown-original]').hide();
+                        $that.addClass('markdown');
                     });
                 });
             });
