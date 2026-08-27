@@ -336,66 +336,330 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
     color: var(--fg);
     white-space: pre;
 }
-.code-area a.l {
+/* Line-number gutter — mirror style-1.0.6.css .l / .hl so the gutter
+ * reads as a fixed-width muted column on the left of every line, with
+ * every 10th line highlighted (.hl). Without the gutter background the
+ * anchors just look like big blue links floating in space (see the
+ * "before" screenshot). Match original specificity (`.l, .hl`) so that
+ * the original rule from style-1.0.6.css also wins when both are
+ * loaded; the scoped overrides below restore the gutter look on top
+ * of any rule that would otherwise turn `.l` into a blue link. */
+.code-area pre a.l,
+.code-area pre a.hl {
     display: inline-block;
-    width: 36px;
-    min-width: 36px;
+    width: 3.5em;
+    min-width: 3.5em;
     text-align: right;
-    padding: 0 8px 0 0;
-    margin-right: 8px;
-    color: var(--muted);
+    padding: 0 .4em 0 .4em;
+    margin-right: .5em;
+    background-color: #f6f8fa;
+    color: #8b949e;
     user-select: none;
     text-decoration: none;
     font-size: 11px;
-    border-right: 1px solid var(--border-light);
+    font-family: var(--font-mono);
+    border: 0;
 }
-.code-area a.l:hover { color: var(--accent); }
-.code-area pre a { color: var(--accent); text-decoration: none; }
-.code-area pre a:hover { text-decoration: underline; }
+.code-area pre a.l:hover { color: var(--accent); }
+.code-area pre a.hl { color: var(--accent); font-weight: 600; }
+/* Goto-line target highlight — when URL has #N, light up that row's
+ * gutter anchor (matches original style-1.0.6.css rule). */
+.code-area div[id^='src'] a.l:target,
+.code-area div[id^='src'] a.hl:target {
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+/* Symbol/link highlighting inside the dumped xref. Scoped to a.l /
+ * a.hl above so that the gutter anchors don't pick up the blue
+ * accent colour. */
+.code-area pre a:not(.l):not(.hl) { color: var(--accent); text-decoration: none; }
+.code-area pre a:not(.l):not(.hl):hover { text-decoration: underline; }
+/* Scope fold anchors inside the dumped xref — emit at end of each
+ * scope-head line; keep them inline-block so the layout doesn't
+ * break onto a new line. */
+.code-area pre span.scope-head { display: inline; }
+.code-area pre span.scope-body { display: inline; }
+/* Annotate mode ("blame" column). The xref dump emits, for each
+ * annotated line, after the line-number anchor:
+ *   <span class="blame">
+ *       <a class="r title-tooltip" ...>rev</a>
+ *       <a class="search" ...></a>
+ *       <span class="a">author</span>
+ *   </span>
+ * In the original style-1.0.6.css all three classes share a single
+ * rule with `.l, .hl` (display: inline-block, 6ex wide, gutter
+ * background). Without those rules the author/revision text breaks
+ * out of the gutter and overlaps the line-number column. */
+.code-area pre a.r,
+.code-area pre span.a {
+    display: inline-block;
+    width: 6em;
+    text-align: right;
+    padding: 0 .4em 0 .4em;
+    margin-right: .5em;
+    background-color: #f6f8fa;
+    color: #6e7681;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    user-select: none;
+    text-decoration: none;
+    vertical-align: top;
+}
+.code-area pre a.r:hover { color: var(--accent); text-decoration: underline; }
+.code-area pre a.search {
+    display: inline-block;
+    width: 1.4em;
+    background-color: #f6f8fa;
+    color: #6e7681;
+    font-size: 11px;
+    text-align: center;
+    margin-right: .5em;
+    text-decoration: none;
+}
+.code-area pre a.search:hover { color: var(--accent); text-decoration: none; }
+.code-area pre span.most_recent_revision { font-weight: 600; color: var(--accent); }
+/* Hide the scope-signature span (it lives between the line-number anchor
+ * and the rest of the line; original style-1.0.6.css hides it via
+ * display: none and the JS shows it again when the scope is folded).
+ * Without this rule the signature text leaks back into the gutter area
+ * on every scope-start line. */
+.code-area pre span.scope-signature { display: none; }
+.code-area pre span.fold-icon,
+.code-area pre span.unfold-icon,
+.code-area pre span.fold-space {
+    display: inline-block;
+    width: 11px; height: 11px;
+    margin: 0 .2em;
+}
+.code-area pre span.fold-icon { background-image: url('<%= request.getContextPath() %>/default/img/folding.png'); background-repeat: no-repeat; }
+.code-area pre span.unfold-icon { background-image: url('<%= request.getContextPath() %>/default/img/unfolding.png'); background-repeat: no-repeat; }
 .code-area.raw-mode pre { color: var(--fg) !important; }
 .code-area.raw-mode pre * { color: inherit !important; font-weight: normal !important; font-style: normal !important; }
 .code-area.raw-mode pre a { text-decoration: none; }
 
-/* Popup windows (Scopes / Navigate) */
-.popup-overlay { display: none; position: fixed; inset: 0; z-index: 100; }
-.popup-overlay.open { display: block; }
-.popup-window {
-    position: absolute;
-    top: 80px; right: 60px;
-    width: 360px; max-height: 520px;
-    background: #fffde7;
-    border: 1.5px solid #e0dcc0;
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
+/* `body.lines-hidden` (toggled by utils.js lntoggle()) must beat the
+ * `.code-area pre a.l { display: inline-block }` rule above so the
+ * Line button can hide the gutter. Same for `.hl`. The original
+ * CSS rule lives in style-1.0.6.css but is overridden by specificity,
+ * so we reproduce it here at higher specificity. */
+body.lines-hidden .code-area pre a.l,
+body.lines-hidden .code-area pre a.hl {
+    display: none !important;
+}
+body.lines-hidden .code-area pre a.r,
+body.lines-hidden .code-area pre a.search,
+body.lines-hidden .code-area pre span.a {
+    display: none !important;
+}
+body.lines-hidden .code-area pre span.fold-space,
+body.lines-hidden .code-area pre span.fold-icon,
+body.lines-hidden .code-area pre span.unfold-icon {
+    display: none !important;
+}
+
+/* The comprehensive IntelliScence / Scopes / Navigate floating-window
+ * styles live further down (immediately after the symbol-colour
+ * rules). Nothing extra to add here. */
+
+/* Symbol-colour classes used by the xref dump. The CSS class comes
+ * from XrefStyle.ssClass — different colours per definition type
+ * (class vs method vs field vs …). Without explicit rules the
+ * generic `a:not(.l):not(.hl)` rule painted every definition in the
+ * single accent colour. We mirror the per-class colours from the
+ * original style-1.0.4.css (apache_tomcat/webapps/source) so the
+ * type distinction is preserved.
+ *
+ * Specificity note: the generic rule above is
+ *   `.code-area pre a:not(.l):not(.hl)`
+ * whose specificity is (0, 3, 2) — `:not(.l)` and `:not(.hl)`
+ * contribute the specificity of their argument, not zero. A bare
+ * `.code-area a.xm` is only (0, 2, 1) and loses. The fix is to add
+ * the same `:not(.l):not(.hl)` chain to every symbol rule so the
+ * specificity is (0, 4, 2); with our rules placed AFTER the generic
+ * rule in source order, they win for matching anchors. The chain
+ * still excludes line-number / highlighted anchors (.l / .hl) so the
+ * gutter styling stays intact. */
+.code-area pre a:not(.l):not(.hl).xm   { color: #c66;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xa   { color: #60c;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xl   { color: #963;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xv   { color: #c30;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xc   { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xp   { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xi   { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xn   { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xe   { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xer  { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xs   { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xt   { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xts  { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xu   { color: #909;      font-weight: 700; font-style: italic; }
+.code-area pre a:not(.l):not(.hl).xfld { color: #090;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xmb  { color: #090;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xf   { color: #00f;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xmt  { color: #00f;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xsr  { color: #00f;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).xlbl { color: red;       font-weight: 700; background-color: yellow; }
+.code-area pre a:not(.l):not(.hl).xr   { color: #909;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).d    { color: #909;      font-weight: 700; }
+.code-area pre a:not(.l):not(.hl).scope{ color: steelblue; font-weight: 700; padding-left: 1ex;  }
+
+/* ── Floating windows created by utils.js (Intelligence, Scopes,
+ * Navigate) ──
+ *
+ * The original OpenGrok stylesheet default/style-1.0.6.css carries
+ * the rules for these windows, but the refactored chrome no longer
+ * references that file (we render an inline theme above). We inline
+ * the minimum subset of those rules here so the three jQuery-UI
+ * floating windows still look and behave like the upstream deployment:
+ * opaque cream background, fixed positioning above the code area,
+ * proper inner-element layout, and the six symbol-highlight colours
+ * used by the IntelliScence window's Highlight/Search/Prev/Next
+ * controls. */
+.window {
+    position: fixed;
+    font-size: 12px;
+    font-family: monospace;
     overflow: hidden;
-    display: none;
-    z-index: 101;
+    z-index: 10;
 }
-.popup-overlay.open .popup-window { display: block; }
-.popup-titlebar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 14px;
-    border-bottom: 1px solid #ddd9b8;
-    background: #fffde7;
+.window-header {
+    padding: 10px;
+    min-height: 20px;
+    border-bottom: 1px solid black;
 }
-.popup-titlebar h3 { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: #333; margin: 0; }
-.popup-close {
-    width: 26px; height: 26px;
-    border: 1.5px solid #bbb; border-radius: 4px;
-    background: #fff; color: #555;
-    font-size: 14px; font-weight: 700;
-    cursor: pointer;
-    display: grid; place-items: center;
-    transition: background 0.12s, border-color 0.12s;
-    line-height: 1;
+.window-body {
+    overflow: auto;
+    height: calc(100% - 40px - 1px - 20px);
+    padding: 10px 10px 10px 10px;
+    width: calc(100% - 20px);
 }
-.popup-close:hover { background: #f5f0d0; border-color: #999; }
-.popup-body { padding: 12px 16px 16px; overflow-y: auto; max-height: 460px; }
-.popup-section { margin-bottom: 14px; }
-.popup-section-title { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: #333; margin-bottom: 4px; }
-.popup-section ul { margin: 0; padding-left: 20px; list-style: disc; }
-.popup-section li { font-family: var(--font-mono); font-size: 12.5px; color: #c0392b; line-height: 1.7; }
-.popup-section li.muted { color: #999; font-style: italic; }
+.intelli-window {
+    width: 504px;
+    max-height: 400px;
+}
+.scopes-window {
+    min-width: 150px;
+    max-width: 40%;
+    max-height: 400px;
+}
+.navigate-window {
+    min-width: 200px;
+    max-width: 300px;
+    max-height: 480px;
+}
+.diff_navigation_style {
+    border: solid 1px var(--og-border, #dddddd);
+    border-radius: 5px;
+    box-shadow: 10px 10px 5px var(--og-popup-shadow, #888888);
+    /* Solid cream background so the code area never bleeds through.
+     * Use `background` (shorthand) AND `background-color` so any later
+     * `background: transparent` reset (e.g. jQuery-UI's `.ui-front`
+     * rule) cannot override us — `background:` resets every layer,
+     * including color, while `background-color:` only resets the color
+     * layer. Both together cover either order. */
+    background: rgb(255, 255, 204);
+    background-color: rgb(255, 255, 204);
+}
+/* Symbol highlight colours used by the IntelliScence window's
+ * "Highlight" / "Unhighlight" buttons. Same six colours as the
+ * upstream default/style-1.0.6.css. */
+.symbol-highlighted.hightlight-color-1 { background-color: #ffd700; }
+.symbol-highlighted.hightlight-color-2 { background-color: #00ff00; }
+.symbol-highlighted.hightlight-color-3 { background-color: #00ccff; }
+.symbol-highlighted.hightlight-color-4 { background-color: #F653F8; }
+.symbol-highlighted.hightlight-color-5 { background-color: rgb(242, 132, 34); }
+.symbol-highlighted.hightlight-color-6 { background-color: #B6EBB5; }
+/* Inner content of the IntelliScence floating window — pinned to the
+ * window's cream background so the code area never bleeds through,
+ * and styled to match the upstream print-friendly rendering.
+ *
+ * Belt-and-suspenders: the popup is appended to <body> by utils.js
+ * line 724, and jQuery-UI's `.ui-front` class (from the
+ * jquery-ui-1.12.1-custom theme stylesheet) would normally not
+ * apply here, but the IntelliScence popup adds `class="window
+ * diff_navigation_style intelli-window"` only — no `ui-*` classes.
+ * The cream `background-color` is set on every layer (the window
+ * container, the header, the body) so the .code-area's `#fbfcfd`
+ * xref-paper background never shows through, even if the user
+ * scrolls the code area while the popup is open. */
+#intelli_win,
+#scopes_win,
+#navigate_win {
+    background: rgb(255, 255, 204);
+    background-color: rgb(255, 255, 204);
+}
+#intelli_win .window-header,
+#scopes_win .window-header,
+#navigate_win .window-header {
+    background: rgb(255, 255, 204);
+    background-color: rgb(255, 255, 204);
+}
+#intelli_win .window-body,
+#scopes_win .window-body,
+#navigate_win .window-body {
+    background: rgb(255, 255, 204);
+    background-color: rgb(255, 255, 204);
+}
+#intelli_win a,
+#scopes_win a,
+#navigate_win a {
+    color: #0000ee;
+    text-decoration: underline;
+}
+#intelli_win a:hover,
+#scopes_win a:hover,
+#navigate_win a:hover {
+    color: #ff5500;
+}
+#intelli_win b.symbol-name,
+#scopes_win b.symbol-name,
+#navigate_win b.symbol-name {
+    font-weight: 700;
+    color: inherit;
+}
+#intelli_win h2,
+#intelli_win h5,
+#scopes_win h2,
+#scopes_win h5,
+#navigate_win h2,
+#navigate_win h5 {
+    color: #333;
+    margin: 6px 0 4px;
+    font-size: 12px;
+}
+#intelli_win h2 {
+    font-size: 16px;
+    font-weight: 700;
+}
+#intelli_win ul,
+#scopes_win ul,
+#navigate_win ul {
+    margin: 0 0 8px;
+    padding-left: 20px;
+    list-style: disc;
+}
+#intelli_win li,
+#scopes_win li,
+#navigate_win li {
+    line-height: 1.7;
+}
+#intelli_win hr,
+#scopes_win hr,
+#navigate_win hr {
+    border: 0;
+    border-top: 1px solid #c0c0c0;
+    margin: 6px 0;
+}
+#intelli_win .pull-right,
+#scopes_win .pull-right,
+#navigate_win .pull-right {
+    float: right;
+}
+#intelli_win .clearfix,
+#scopes_win .clearfix,
+#navigate_win .clearfix {
+    clear: both;
+}
 
 @media (max-width: 900px) {
     .code-toolbar { padding: 6px 16px; }
@@ -406,7 +670,8 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
 }
 @media (max-width: 600px) {
     .code-area pre { padding: 0 12px; font-size: 12px; }
-    .code-area a.l { width: 40px; min-width: 40px; padding-right: 6px; margin-right: 4px; }
+    .code-area pre a.l,
+    .code-area pre a.hl { width: 3em; min-width: 3em; padding-right: .3em; margin-right: .3em; }
 }
 
 /* ── Directory listing readme preview (markdown) ──
@@ -769,9 +1034,28 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
 
     <main class="code-area" id="code-area">
         <div class="code-content" id="code-content"><%
+            /* Decide once whether xref is going to be rendered by us
+             * directly (in which case we wrap with <div id="src">) or
+             * delegated to xref.jspf (which emits its own <div id="src">).
+             * Avoids duplicate ids — invalid HTML and only the first
+             * match would be picked up by $('#src'). */
+            File _codeViewXrefFile = null;
+            boolean _codeViewRenderDirect = false;
             if (!rev.isEmpty()) {
-                File xrefFile;
-                if (_chromeListCfg.isLatestRevision(rev) && (xrefFile = _chromeListCfg.findDataFile()) != null) {
+                if (_chromeListCfg.isLatestRevision(rev)) {
+                    _codeViewXrefFile = _chromeListCfg.findDataFile();
+                    _codeViewRenderDirect = _codeViewXrefFile != null;
+                }
+            } else {
+                _codeViewXrefFile = _chromeListCfg.findDataFile();
+                _codeViewRenderDirect = _codeViewXrefFile != null;
+            }
+            if (_codeViewRenderDirect) { %>
+            <div id="src" data-navigate-window-enabled="<%= navigateWindowEnabled %>"><%
+            }
+            if (!rev.isEmpty()) {
+                if (_codeViewRenderDirect) {
+                    File xrefFile = _codeViewXrefFile;
                     if (_chromeListCfg.annotate()) {
                         BufferedInputStream bin = new BufferedInputStream(new FileInputStream(resourceFile));
                         try {
@@ -783,11 +1067,13 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
                             } else if (g == AbstractAnalyzer.Genre.HTML) {
                                 r = new InputStreamReader(bin);
                                 Util.dumpXref(out, r, ctxPath, resourceFile);
-                            } else if (g == AbstractAnalyzer.Genre.PLAIN) {
+                            } else if (g == AbstractAnalyzer.Genre.PLAIN) { %>
+            <pre><%
                                 Definitions defs = IndexDatabase.getDefinitions(resourceFile);
                                 Annotation annotationX = _chromeListCfg.getAnnotation();
                                 r = IOUtils.createBOMStrippedReader(bin, StandardCharsets.UTF_8.name());
-                                AnalyzerGuru.writeDumpedXref(ctxPath, a, r, out, defs, annotationX, project, resourceFile);
+                                AnalyzerGuru.writeDumpedXref(ctxPath, a, r, out, defs, annotationX, project, resourceFile); %>
+            </pre><%
                             } else { %>
             Click <a href="<%= rawPath %>">download <%= basename %></a><%
                             }
@@ -801,40 +1087,463 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
                 } else { %>
             <%@ include file="/xref.jspf" %><% out.flush(); %><%
                 }
-            } else {
-                File xrefFile = _chromeListCfg.findDataFile();
-                if (xrefFile != null) { %>
+            } else if (_codeViewRenderDirect) {
+                File xrefFile = _codeViewXrefFile; %>
             <pre><% Util.dumpXref(out, xrefFile, xrefFile.getName().endsWith(".gz"), ctxPath); %></pre><% out.flush(); %><%
-                } else { %>
+            } else { %>
             <%@ include file="/xref.jspf" %><% out.flush(); %><%
-                }
+            }
+            if (_codeViewRenderDirect) { %>
+            </div><%
             }
         %>
         </div>
     </main>
+    <%-- utils-0.0.48.js (line 1553) keys the IntelliScence window init
+         off the presence of #contextpath, and pageReadyList() (line
+         2054) binds click on #navigate. Render the empty stubs the
+         plugin expects. --%>
+    <input type="hidden" id="contextpath" value="<%= ctxPath %>" />
+    <a href="#" id="navigate" style="display:none"></a>
+<script type="text/javascript">
+/* <![CDATA[ */
+/* ---------------------- list.jsp page-specific scripts ---------------------
+ *
+ * Restore the toolbar/popup interactivity that was lost when list.jsp
+ * was refactored to the new chrome (header / breadcrumb / footer).
+ * The button styles are intentionally kept as-is; only behaviour is
+ * wired up here.
+ *
+ * The original (apache_tomcat/webapps/source) uses utils.js to manage
+ * three jQuery-UI floating windows:
+ *   • $.intelliWindow  – hovers with `a.intelliWindow-symbol` and shows
+ *                       Highlight / Unhighlight / Search / Google links.
+ *                       Initialised when #contextpath is on the page.
+ *   • $.scopesWindow   – shows the enclosing scope of the line at the
+ *                       top of the viewport. Initialised by init_scopes()
+ *                       when #src is on the page.
+ *   • $.navigateWindow – standalone window with the symbol list.
+ *                       Initialised by pageReadyList().
+ *
+ * pageReadyList() (utils-0.0.47.js / utils-0.0.48.js) wires up
+ *   $.navigateWindow.init();
+ *   $.navigateWindow.update(get_sym_list());
+ *   $('#navigate').click(...).toggle();
+ * and also binds the keyboard shortcuts (1 → toggle IntelliScence,
+ * 2-7 → highlight colors, 8 → unhighlight all, n/b → next/prev symbol)
+ * inside $.intelliWindow's load callback.
+ *
+ * We delegate to the plugin wherever possible: the toolbar buttons just
+ * invoke the same toggle() / show() / hide() methods that pageReadyList
+ * would invoke through `#navigate`. We DO call pageReadyList() so the
+ * plugin also wires up the IntelliScence keypress listener, the
+ * mouseover handler on `a.intelliWindow-symbol`, and the `$('#navigate')`
+ * click binding that the rest of the code base relies on.
+ *
+ * The `.active` class on a toolbar button is synced to its window's
+ * `:visible` state via the `show`/`hide` jQuery events the plugin
+ * fires — no manual bookkeeping needed.
+ */
+document.pageReady.push(function() {
+    /* Delegate the heavy lifting to the upstream pageReadyList(). It
+     * already does everything the original Apache-tomcat deployment
+     * did: initialises $.navigateWindow, populates it from
+     * get_sym_list(), binds the #navigate click, and (through the
+     * intelliWindow load callback) wires up the 1-8/n/b keyboard
+     * shortcuts and the hover handler on a.intelliWindow-symbol. */
+    if (typeof pageReadyList === 'function') {
+        pageReadyList();
+    } else if (document.highlight_count === undefined) {
+        document.highlight_count = 0;
+    }
 
-    <div class="popup-overlay" id="popup-scopes-overlay">
-        <div class="popup-window" id="popup-scopes">
-            <div class="popup-titlebar">
-                <h3>Scopes Window</h3>
-                <button class="popup-close" data-close="scopes">&#x2715;</button>
-            </div>
-            <div class="popup-body" id="popup-scopes-body">
-                <p style="font-size:12px;color:#999;margin:0;">&#x2014;</p>
-            </div>
-        </div>
-    </div>
-    <div class="popup-overlay" id="popup-navigate-overlay">
-        <div class="popup-window" id="popup-navigate">
-            <div class="popup-titlebar">
-                <h3>Navigate Window</h3>
-                <button class="popup-close" data-close="navigate">&#x2715;</button>
-            </div>
-            <div class="popup-body" id="popup-navigate-body">
-                <p style="font-size:12px;color:#999;margin:0;">&#x2014;</p>
-            </div>
-        </div>
-    </div>
+    /* After pageReadyList() runs, both $.navigateWindow and
+     * $.scopesWindow exist (scopesWindow was created earlier by the
+     * utils.js `init_scopes()` call inside `$(document).ready`,
+     * navigateWindow was created by pageReadyList). Re-park them to
+     * the layout our `_layoutPopups()` helper expects so the very
+     * first click on either button already starts from the right
+     * default position rather than from utils.js's hardcoded
+     * `top: 150px`. */
+    if (typeof _layoutPopups === 'function') {
+        _layoutPopups();
+    }
+
+    /* No popup-overlay suppression: utils.js needs to create the
+     * scopesWindow / navigateWindow / intelliWindow jQuery-UI floating
+     * windows itself. Removing the previous no-op shims here lets
+     * init_scopes() and pageReadyList() do their job. */
+
+    /* ── Fold ──
+     *
+     * The xref dump emits <a onclick="fold(this.parentNode.id)"
+     * id="X_fold_icon"> with a global `fold(id)` function from
+     * utils-0.0.48.js. That inline handler is enough on its own, but
+     * utils.js loads *after* the dumped onclick is parsed and *before*
+     * this pageReady callback runs (utils.js installs its own
+     * `window.fold` synchronously), so by the time the user clicks the
+     * fold icon, `window.fold` is utils.js's fold().
+     *
+     * We still install a `_fold` fallback here in case utils.js fails
+     * to load. We deliberately do NOT add a delegated click handler —
+     * that would cause the inline onclick AND the delegated handler
+     * to both fire and cancel each other out (toggle twice = no
+     * visible change).
+     *
+     * NOTE: the previous revision registered this in `domReady.push`,
+     * but utils-0.0.48.js line 1532 has `for (let i in this.domReady)`
+     * (note `this`, not `document`) — that loop iterates over an
+     * undefined object's properties and the domReady callbacks never
+     * fire. pageReady callbacks DO fire (utils-0.0.48.js line 1525–1528
+     * iterates `document.pageReady` correctly), so all of the toolbar
+     * click bindings live here now. */
+    function _fold(id) {
+        $('#' + id + '_fold_icon')
+            .children()
+            .first()
+            .toggleClass('unfold-icon')
+            .toggleClass('fold-icon');
+        $('#' + id + '_fold').toggle('fold');
+    }
+    window.fold = _fold;
+
+    /* ── Toolbar button handlers ──
+     *
+     * Each button is a thin wrapper around the utils.js plugin it
+     * controls. We sync the `.active` class with the window's
+     * `:visible` state via the `show`/`hide` events utils.js fires. */
+
+    /* Annotate: mirrors utils.js `get_annotations()`. When the JSP
+     * has already computed a href (annotHref / xannotateHref), the
+     * <a> tag itself navigates; otherwise we call get_annotations(). */
+    $('#btn-annotate').on('click', function(e) {
+        if ($(this).is('[disabled]') || $(this).attr('aria-disabled') === 'true') {
+            e.preventDefault();
+            return false;
+        }
+        const $a = $(this);
+        if ($a.attr('href')) {
+            return true;
+        }
+        e.preventDefault();
+        if (typeof get_annotations === 'function') {
+            get_annotations();
+        }
+        return false;
+    });
+
+    /* Line: toggle the line-number gutter. Mirrors lntoggle(). */
+    $('#btn-line').on('click', function() {
+        if (typeof lntoggle === 'function') lntoggle();
+        $(this).toggleClass('active', $('body').hasClass('lines-hidden'));
+        return false;
+    });
+
+    /* Scopes: toggle the jQuery-UI scopesWindow that utils.js creates
+     * in init_scopes(). The window's `toggle()` method is installed
+     * by the jQuery-UI Window plugin's `init` callback (utils-0.0.48.js
+     * line 664) — once the plugin has run, `$.scopesWindow.toggle()`
+     * works regardless of any internal `initialized` flag. We therefore
+     * call it as long as the object exists. We also flip the button's
+     * `.active` class synchronously so the visual stays in sync even
+     * if the `show`/`hide` events are silenced for some reason. */
+    document.getElementById('btn-scopes').addEventListener('click', function(e) {
+        e.preventDefault();
+        const $btn = document.getElementById('btn-scopes');
+        try {
+            if (window.jQuery && jQuery.scopesWindow) {
+                jQuery.scopesWindow.toggle();
+                const visible = jQuery.scopesWindow.is(':visible');
+                $btn.classList.toggle('active', visible);
+                _layoutPopups();
+            } else {
+                console.warn('[opengrok] scopesWindow not initialised yet');
+            }
+        } catch (err) {
+            console.error('[opengrok] btn-scopes error', err);
+        }
+        return false;
+    });
+
+    /* Navigate: toggle the jQuery-UI navigateWindow that pageReadyList
+     * creates (it also binds $('\#navigate').click → toggle, so the
+     * hidden <a id="navigate"> we render above also works). */
+    document.getElementById('btn-navigate').addEventListener('click', function(e) {
+        e.preventDefault();
+        const $btn = document.getElementById('btn-navigate');
+        try {
+            if (window.jQuery && jQuery.navigateWindow) {
+                jQuery.navigateWindow.toggle();
+                const visible = jQuery.navigateWindow.is(':visible');
+                $btn.classList.toggle('active', visible);
+                _layoutPopups();
+            } else if (window.jQuery && jQuery.intelliWindow) {
+                jQuery.intelliWindow.toggleAndMove();
+                const visible = jQuery.intelliWindow.is(':visible');
+                $btn.classList.toggle('active', visible);
+            } else {
+                console.warn('[opengrok] navigateWindow not initialised yet');
+            }
+        } catch (err) {
+            console.error('[opengrok] btn-navigate error', err);
+        }
+        return false;
+    });
+
+    /* ── Scopes / Navigate co-layout ──
+     *
+     * utils-0.0.48.js (lines 1153, 1224) initialises both
+     * `$.scopesWindow` and `$.navigateWindow` with the SAME inline
+     * `css({ top: '150px', right: '20px' })`. The two jQuery-UI
+     * floating windows therefore live in the exact same corner of
+     * the viewport — opening the second one stacks on top of the
+     * first and the lower one disappears behind the upper one.
+     *
+     * utils-0.0.48.js attempts to dodge this for navigateWindow only
+     * (lines 1234-1248 + 1307-1310): when scopesWindow's `show`
+     * event fires, navigateWindow re-runs `updatePosition()` which
+     * moves navigate to `scopes.position().top + scopes.outerHeight()
+     * + 20`. That logic only works ONE WAY:
+     *
+     *   1. scopes opens FIRST, then navigate opens → updatePosition
+     *      correctly parks navigate below scopes. Works.
+     *   2. navigate opens FIRST, then scopes opens → utils.js never
+     *      nudges scopes, so scopes pops up at (150, 20) directly on
+     *      top of navigate. Both buttons show "active" but only one
+     *      popup is visible. Broken — matches the original report.
+     *
+     * Our fix: every time the user clicks Scopes or Navigate, run
+     * `_layoutPopups()` to enforce the rule "scopes above navigate".
+     * - scopes visible alone: park scopes at the default top.
+     * - navigate visible alone: park navigate at the default top.
+     * - both visible:           scopes at default top, navigate pinned
+     *                           just below scopes' outerHeight + 20px
+     *                           gap so they don't overlap.
+     * - neither visible:        leave them alone (the previous hide
+     *                           animation has already parked them off
+     *                           whatever position they had).
+     *
+     * We always pin via `.stop().animate({ top })` to match the
+     * behaviour utils.js uses elsewhere; .stop() prevents queues of
+     * pending animations from fighting each other when the user
+     * clicks the buttons quickly. */
+    function _layoutPopups() {
+        if (!window.jQuery) return;
+        const $scopes  = jQuery.scopesWindow;
+        const $nav     = jQuery.navigateWindow;
+        if (!$scopes || !$scopes.length || !$nav || !$nav.length) return;
+
+        const scopesVisible  = $scopes.is(':visible');
+        const navigateVisible = $nav.is(':visible');
+        if (!scopesVisible && !navigateVisible) return;
+
+        const DEFAULT_TOP = 80;     // px from viewport top
+        const GAP         = 20;     // px gap between the two windows
+
+        if (scopesVisible && navigateVisible) {
+            // Both up: scopes at the default, navigate pinned just
+            // under scopes. We measure scopes' outerHeight for the
+            // offset; if the float isn't yet rendered the helper
+            // returns 0 and the two stack — user will see that as
+            // a one-frame flicker, which is acceptable.
+            $scopes.stop(true, false).animate({ top: DEFAULT_TOP });
+            const scopesBottom = $scopes.position().top + $scopes.outerHeight();
+            $nav.stop(true, false).animate({ top: scopesBottom + GAP });
+        } else if (scopesVisible) {
+            $scopes.stop(true, false).animate({ top: DEFAULT_TOP });
+        } else {
+            $nav.stop(true, false).animate({ top: DEFAULT_TOP });
+        }
+    }
+    // Expose for utils.js's own update() listeners (e.g. when scopes
+    // auto-shows on first scroll) so the navigate window follows.
+    window._layoutPopups = _layoutPopups;
+
+    /* Wire _layoutPopups() to the jQuery show/hide events that
+     * utils.js fires on the scopesWindow / navigateWindow elements.
+     * utils.js itself registers internal listeners on the SAME
+     * events for its own updatePosition bookkeeping; our listener
+     * chains off them and only re-pins the top offsets so the two
+     * windows never overlap. Without this, the
+     * scopesWindow.update() helper (utils-0.0.48.js line 1182-1188)
+     * can auto-show the scopes window as the user scrolls past the
+     * first scope-head, leaving navigate out of sync. */
+    if (window.jQuery && jQuery.scopesWindow && jQuery.scopesWindow.length) {
+        jQuery.scopesWindow.on('show', _layoutPopups)
+                          .on('hide', _layoutPopups);
+    }
+    if (window.jQuery && jQuery.navigateWindow && jQuery.navigateWindow.length) {
+        jQuery.navigateWindow.on('show', _layoutPopups)
+                            .on('hide', _layoutPopups);
+    }
+
+    /* The Scopes/Navigate .active class is now toggled directly inside
+     * each button's click handler (synchronous with the show()/hide()
+     * call), so we don't need any deferred sync code. */
+
+    /* Raw: replace the rendered xref with the plain file contents. The
+     * original utility toggled a "raw mode" class on the <pre> so all
+     * syntax colouring is dropped; we replicate that on `.code-area`
+     * (which is the wrapper that holds the dumped xref) and re-trigger
+     * the spaces plugin so line numbers stay in sync. */
+    $('#btn-raw').on('click', function() {
+        const $area = $('#code-area');
+        const goingRaw = !$area.hasClass('raw-mode');
+        $area.toggleClass('raw-mode', goingRaw);
+        $(this).toggleClass('active', goingRaw);
+        return false;
+    });
+
+    /* Goto Line: scroll the code area so the requested line is at the
+     * top, and highlight it (anchor format `#<line>` matches the
+     * anchors emitted by the dumped xref).
+     *
+     * Implementation note: the previous implementation used
+     *     $area.animate({ scrollTop: $area.scrollTop()
+     *                      + ($anchor.offset().top - $area.offset().top)
+     *                      - 16 }, 250);
+     * Two bugs combined to make it silently fail:
+     *
+     *   1. The new chrome wraps the xref in
+     *      `<main class="code-area" id="code-area">
+     *         <div class="code-content" id="code-content"> … </div>
+     *       </main>`
+     *      where `.code-content` carries its own `overflow: auto`
+     *      (rule ".code-area .code-content"). When that inner wrapper
+     *      is shorter than its child it doesn't actually scroll, so
+     *      the jQuery animate fires but the visible scrollTop of
+     *      #code-area never moves.
+     *
+     *   2. The formula added `$area.scrollTop()` to the delta, which
+     *      double-counted the existing scroll. `offset().top` is in
+     *      document-absolute coordinates, so subtracting
+     *      `$area.offset().top` already gives the in-content offset —
+     *      the current scroll position must NOT be added again.
+     *      When the user had scrolled into a long file, the result
+     *      was over `scrollHeight - clientHeight`, the browser
+     *      silently clamped it, and the view didn't move.
+     *
+     * We delegate to the browser's native
+     * scrollIntoView({ block: 'start' }) first — it walks up to the
+     * nearest scrolling ancestor of the anchor itself, which is
+     * #code-area, regardless of any intermediate wrapper. We then
+     * fall back to a direct scrollTop() write on #code-area using
+     * the corrected formula (anchorTop - areaTop - 16) so any older
+     * browser without options-object support still lands on the
+     * right line. */
+    function _gotoLine() {
+        const $input = $('#goto-line-input');
+        const n = parseInt($input.val(), 10);
+        if (!n || n < 1) return false;
+        const $anchor = $('#src').find('a[name="' + n + '"]');
+        if (!$anchor.length) return false;
+
+        // Native scrollIntoView first: lets the browser pick the
+        // right scroll container (the nearest scrolling ancestor of
+        // the anchor). behaviour: 'smooth' gives the same 250ms-ish
+        // glide the old jQuery animate did, but works across nested
+        // overflow: auto wrappers that the jQuery formula did not.
+        try {
+            $anchor[0].scrollIntoView({ block: 'start', behavior: 'smooth' });
+        } catch (_) {
+            try {
+                $anchor[0].scrollIntoView();
+            } catch (_) {
+                /* Old browsers with no scrollIntoView at all — fall
+                 * through to the explicit scrollTop write below. */
+            }
+        }
+
+        // Belt-and-suspenders for browsers / edge cases where
+        // scrollIntoView doesn't move #code-area (e.g. the anchor's
+        // nearest scrolling ancestor is the inner .code-content
+        // rather than the outer .code-area).
+        //
+        // Formula: anchor's document-absolute top minus the area
+        // container's document-absolute top gives the anchor's
+        // in-content offset. That IS the scrollTop we want — no
+        // current-scroll addition, no over-counting.
+        const $area = $('#code-area');
+        const anchorTop = $anchor.offset().top;
+        const areaTop = $area.offset().top;
+        if (Number.isFinite(anchorTop) && Number.isFinite(areaTop)) {
+            const target = (anchorTop - areaTop) - 16;
+            if (Number.isFinite(target)) {
+                $area.scrollTop(Math.max(0, target));
+            }
+        }
+
+        if (history.replaceState) {
+            history.replaceState(null, '', '#' + n);
+        } else {
+            location.hash = '#' + n;
+        }
+        return false;
+    }
+    $('#goto-line-btn').on('click', _gotoLine);
+    $('#goto-line-input').on('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            return _gotoLine();
+        }
+    });
+    function _gotoLine() {
+        const $input = $('#goto-line-input');
+        const n = parseInt($input.val(), 10);
+        if (!n || n < 1) return false;
+        const $anchor = $('#src').find('a[name="' + n + '"]');
+        if (!$anchor.length) return false;
+
+        // Native scrollIntoView: lets the browser pick the right
+        // scroll container. behaviour:'smooth' gives the same 250ms-ish
+        // glide the old jQuery animate did, but works across nested
+        // overflow:auto wrappers that the jQuery formula did not.
+        try {
+            $anchor[0].scrollIntoView({ block: 'start', behavior: 'smooth' });
+        } catch (_) {
+            // Old browsers that don't accept the options object —
+            // fall back to the legacy signature.
+            $anchor[0].scrollIntoView();
+        }
+
+        // Belt-and-suspenders: also push #code-area itself so its
+        // scrollTop matches the anchor position, in case the inner
+        // .code-content wrapper absorbed some of the scroll instead.
+        //
+        // The previous formula added $area.scrollTop() to the delta,
+        // which double-counted the existing scroll (the offset of an
+        // element is already in document-absolute coords, so subtracting
+        // $area's offset.top gives the in-content offset directly).
+        // That double-counting was harmless when the area was at
+        // scrollTop 0, but if the user had already scrolled, it
+        // pushed the view off-screen (and silently failed when the
+        // result overflowed the scrollable range, which is why the
+        // symptom was "URL changes, view doesn't move").
+        const $area = $('#code-area');
+        const anchorTop = $anchor.offset().top;
+        const areaTop = $area.offset().top;
+        if (Number.isFinite(anchorTop) && Number.isFinite(areaTop)) {
+            const target = (anchorTop - areaTop) - 16;
+            if (Number.isFinite(target)) {
+                $area.scrollTop(Math.max(0, target));
+            }
+        }
+
+        if (history.replaceState) {
+            history.replaceState(null, '', '#' + n);
+        } else {
+            location.hash = '#' + n;
+        }
+        return false;
+    }
+    $('#goto-line-btn').on('click', _gotoLine);
+    $('#goto-line-input').on('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            return _gotoLine();
+        }
+    });
+});
+/* ]]> */
+</script>
 <%
     }
 

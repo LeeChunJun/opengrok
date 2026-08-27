@@ -95,24 +95,245 @@ org.opengrok.web.PageConfig"%>
     white-space: pre;
     background: #fbfcfd;
 }
-.xref-paper pre a.l {
+.xref-paper pre a.l,
+.xref-paper pre a.hl {
     display: inline-block;
-    width: 36px;
-    min-width: 36px;
+    width: 3.5em;
+    min-width: 3.5em;
     text-align: right;
-    padding: 0 10px 0 0;
-    margin-right: 10px;
-    color: #9aa4b1;
-    background: #f3f5f8;
-    border-right: 1px solid #e6e9ee;
+    padding: 0 .4em 0 .4em;
+    margin-right: .5em;
+    background-color: #f6f8fa;
+    color: #8b949e;
     user-select: none;
     text-decoration: none;
-    font-size: 11.5px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    border: 0;
 }
 .xref-paper pre a.l:hover { color: var(--accent); }
-.xref-paper pre a { color: var(--accent); text-decoration: none; }
-.xref-paper pre a:hover { text-decoration: underline; }
-.xref-paper pre .hl { color: var(--accent); background: var(--accent-dim); }
+.xref-paper pre a.hl { color: var(--accent); font-weight: 600; }
+/* Goto-line target highlight — when URL has #N, light up that row's
+ * gutter anchor (matches original style-1.0.6.css rule). */
+.xref-paper div[id^='src'] a.l:target,
+.xref-paper div[id^='src'] a.hl:target {
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+.xref-paper pre a:not(.l):not(.hl) { color: var(--accent); text-decoration: none; }
+.xref-paper pre a:not(.l):not(.hl):hover { text-decoration: underline; }
+.xref-paper pre span.scope-head { display: inline; }
+.xref-paper pre span.scope-body { display: inline; }
+/* Annotate mode ("blame" column). The xref dump emits, for each
+ * annotated line, after the line-number anchor:
+ *   <span class="blame">
+ *       <a class="r title-tooltip" ...>rev</a>
+ *       <a class="search" ...></a>
+ *       <span class="a">author</span>
+ *   </span>
+ * In the original style-1.0.6.css all three classes share a single
+ * rule with `.l, .hl` (display: inline-block, 6ex wide, gutter
+ * background). Without those rules the author/revision text breaks
+ * out of the gutter and overlaps the line-number column. */
+.xref-paper pre a.r,
+.xref-paper pre span.a {
+    display: inline-block;
+    width: 6em;
+    text-align: right;
+    padding: 0 .4em 0 .4em;
+    margin-right: .5em;
+    background-color: #f6f8fa;
+    color: #6e7681;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    user-select: none;
+    text-decoration: none;
+    vertical-align: top;
+}
+.xref-paper pre a.r:hover { color: var(--accent); text-decoration: underline; }
+.xref-paper pre a.search {
+    display: inline-block;
+    width: 1.4em;
+    background-color: #f6f8fa;
+    color: #6e7681;
+    font-size: 11px;
+    text-align: center;
+    margin-right: .5em;
+    text-decoration: none;
+}
+.xref-paper pre a.search:hover { color: var(--accent); text-decoration: none; }
+.xref-paper pre span.most_recent_revision { font-weight: 600; color: var(--accent); }
+/* Hide the scope-signature span (it lives between the line-number
+ * anchor and the rest of the line; original style-1.0.6.css hides it
+ * via display: none and the JS shows it again when the scope is
+ * folded). Without this rule the signature text leaks back into the
+ * gutter area on every scope-start line. */
+.xref-paper pre span.scope-signature { display: none; }
+/* Symbol-colour classes used by the xref dump. The CSS class comes
+ * from XrefStyle.ssClass — different colours per definition type
+ * (class vs method vs field vs …). Without these rules, every
+ * definition link would fall through to the generic
+ * `a:not(.l):not(.hl)` rule above and inherit the single accent
+ * colour. Mirrors the per-class colours from the original
+ * default/style-1.0.4.css. */
+.xref-paper a.xm              { color: #c66; font-weight: 700; }
+.xref-paper a.xa              { color: #60c; font-weight: 700; }
+.xref-paper a.xl              { color: #963; font-weight: 700; }
+.xref-paper a.xv              { color: #c30; font-weight: 700; }
+.xref-paper a.xc              { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xp              { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xi              { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xn              { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xe              { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xer             { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xs              { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xt              { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xts             { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xu              { color: #909; font-weight: 700; font-style: italic; }
+.xref-paper a.xfld            { color: #090; font-weight: 700; }
+.xref-paper a.xmb             { color: #090; font-weight: 700; }
+.xref-paper a.xf              { color: #00f; font-weight: 700; }
+.xref-paper a.xmt             { color: #00f; font-weight: 700; }
+.xref-paper a.xsr             { color: #00f; font-weight: 700; }
+.xref-paper a.xlbl            { color: red;  font-weight: 700; background-color: yellow; }
+.xref-paper a.xr              { color: #909; font-weight: 700; }
+.xref-paper a.d               { color: #909; font-weight: 700; }
+.xref-paper a.scope           { color: steelblue; font-weight: 700; padding-left: 1ex;  }
+.xref-paper pre span.fold-icon,
+.xref-paper pre span.unfold-icon,
+.xref-paper pre span.fold-space {
+    display: inline-block;
+    width: 11px; height: 11px;
+    margin: 0 .2em;
+}
+.xref-paper pre span.fold-icon { background-image: url('<%= request.getContextPath() %>/default/img/folding.png'); background-repeat: no-repeat; }
+.xref-paper pre span.unfold-icon { background-image: url('<%= request.getContextPath() %>/default/img/unfolding.png'); background-repeat: no-repeat; }
+
+/* `body.lines-hidden` (toggled by utils.js lntoggle()) must beat the
+ * `.xref-paper pre a.l { display: inline-block }` rule above so the
+ * Line button can hide the gutter when the xref is rendered through
+ * xref.jspf instead of list.jsp's direct-render branch. Same for
+ * `.hl`. The original rule lives in style-1.0.6.css but is
+ * overridden by specificity, so we reproduce it here at higher
+ * specificity. */
+body.lines-hidden .xref-paper pre a.l,
+body.lines-hidden .xref-paper pre a.hl {
+    display: none !important;
+}
+body.lines-hidden .xref-paper pre a.r,
+body.lines-hidden .xref-paper pre a.search,
+body.lines-hidden .xref-paper pre span.a {
+    display: none !important;
+}
+body.lines-hidden .xref-paper pre span.fold-space,
+body.lines-hidden .xref-paper pre span.fold-icon,
+body.lines-hidden .xref-paper pre span.unfold-icon {
+    display: none !important;
+}
+
+/* ── Floating windows created by utils.js (Intelligence, Scopes,
+ * Navigate) ──
+ *
+ * xref.jspf is rendered standalone in some paths (binary/image fallbacks
+ * that bypass list.jsp). We duplicate the floating-window styles here
+ * so the Intelligence / Scopes / Navigate windows still look right
+ * when list.jsp's <style> block isn't on the page. Mirrors the rules
+ * in list.jsp verbatim. */
+.window {
+    position: fixed;
+    font-size: 12px;
+    font-family: monospace;
+    overflow: hidden;
+    z-index: 10;
+}
+.window-header {
+    padding: 10px;
+    min-height: 20px;
+    border-bottom: 1px solid black;
+}
+.window-body {
+    overflow: auto;
+    height: calc(100% - 40px - 1px - 20px);
+    padding: 10px 10px 10px 10px;
+    width: calc(100% - 20px);
+}
+.intelli-window {
+    width: 504px;
+    max-height: 400px;
+}
+.scopes-window {
+    min-width: 150px;
+    max-width: 40%;
+    max-height: 400px;
+}
+.navigate-window {
+    min-width: 200px;
+    max-width: 300px;
+    max-height: 480px;
+}
+.diff_navigation_style {
+    border: solid 1px var(--og-border, #dddddd);
+    border-radius: 5px;
+    box-shadow: 10px 10px 5px var(--og-popup-shadow, #888888);
+    background-color: rgb(255, 255, 204);
+}
+.symbol-highlighted.hightlight-color-1 { background-color: #ffd700; }
+.symbol-highlighted.hightlight-color-2 { background-color: #00ff00; }
+.symbol-highlighted.hightlight-color-3 { background-color: #00ccff; }
+.symbol-highlighted.hightlight-color-4 { background-color: #F653F8; }
+.symbol-highlighted.hightlight-color-5 { background-color: rgb(242, 132, 34); }
+.symbol-highlighted.hightlight-color-6 { background-color: #B6EBB5; }
+#intelli_win, #scopes_win, #navigate_win {
+    background-color: rgb(255, 255, 204);
+}
+#intelli_win .window-body,
+#scopes_win .window-body,
+#navigate_win .window-body {
+    background-color: rgb(255, 255, 204);
+}
+#intelli_win a, #scopes_win a, #navigate_win a {
+    color: #0000ee;
+    text-decoration: underline;
+}
+#intelli_win a:hover, #scopes_win a:hover, #navigate_win a:hover {
+    color: #ff5500;
+}
+#intelli_win b.symbol-name,
+#scopes_win b.symbol-name,
+#navigate_win b.symbol-name {
+    font-weight: 700;
+    color: inherit;
+}
+#intelli_win h2, #intelli_win h5,
+#scopes_win h2, #scopes_win h5,
+#navigate_win h2, #navigate_win h5 {
+    color: #333;
+    margin: 6px 0 4px;
+    font-size: 12px;
+}
+#intelli_win h2 {
+    font-size: 16px;
+    font-weight: 700;
+}
+#intelli_win ul, #scopes_win ul, #navigate_win ul {
+    margin: 0 0 8px;
+    padding-left: 20px;
+    list-style: disc;
+}
+#intelli_win li, #scopes_win li, #navigate_win li {
+    line-height: 1.7;
+}
+#intelli_win hr, #scopes_win hr, #navigate_win hr {
+    border: 0;
+    border-top: 1px solid #c0c0c0;
+    margin: 6px 0;
+}
+#intelli_win .pull-right, #scopes_win .pull-right, #navigate_win .pull-right {
+    float: right;
+}
+#intelli_win .clearfix, #scopes_win .clearfix, #navigate_win .clearfix {
+    clear: both;
+}
 
 /* xref error block (emitted by xref.jspf when reading fails). Pairs
  * with the .xref-paper card style so the error state visually matches
@@ -152,6 +373,10 @@ org.opengrok.web.PageConfig"%>
  * The helper relies on a number of already-declared variables in
  * the calling page's _jspService scope:
  *   LOGGER, basename, rev, resourceFile, rawPath, project
+ *   navigateWindowEnabled  (String "true" / "false" — emitted as the
+ *                           data-navigate-window-enabled attribute on
+ *                           each <div id="src"> so the Navigate popup
+ *                           can auto-open when the project allows it)
  *   r  (declared as InputStreamReader, may be assigned below)
  *
  * The PageConfig is obtained here as `xrefCfg` so that this fragment
@@ -207,7 +432,7 @@ PageConfig xrefCfg = PageConfig.get(request);
                 }
                 if (_xrefG == AbstractAnalyzer.Genre.DATA || _xrefG == AbstractAnalyzer.Genre.XREFABLE || _xrefG == null) {
 %>
-<div id="src" class="xref-paper xref-paper-binary">
+<div id="src" class="xref-paper xref-paper-binary" data-navigate-window-enabled="<%= navigateWindowEnabled %>">
     <div class="xref-paper-inner">
     Download binary file, <a href="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %>
 <%= Util.uriEncode(rev) %>"><%= basename %></a>
@@ -215,7 +440,7 @@ PageConfig xrefCfg = PageConfig.get(request);
 </div><%
                 } else {
 %>
-<div id="src" class="xref-paper">
+<div id="src" class="xref-paper" data-navigate-window-enabled="<%= navigateWindowEnabled %>">
         <pre><%
                     if (_xrefG == AbstractAnalyzer.Genre.PLAIN) {
                         Definitions _xrefDefs = null;
@@ -302,7 +527,7 @@ PageConfig xrefCfg = PageConfig.get(request);
         }
     } else if (_xrefG == AbstractAnalyzer.Genre.IMAGE) {
 %>
-<div id="src" class="xref-paper xref-paper-image">
+<div id="src" class="xref-paper xref-paper-image" data-navigate-window-enabled="<%= navigateWindowEnabled %>">
     <div class="xref-paper-inner">
     <img src="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %><%= Util.uriEncode(rev) %>"
          alt="from Source Repository"/>
@@ -310,7 +535,7 @@ PageConfig xrefCfg = PageConfig.get(request);
 </div><%
     } else {
 %>
-<div id="src" class="xref-paper xref-paper-binary">
+<div id="src" class="xref-paper xref-paper-binary" data-navigate-window-enabled="<%= navigateWindowEnabled %>">
     <div class="xref-paper-inner">
     Download binary file, <a href="<%= rawPath %>?<%= QueryParameters.REVISION_PARAM_EQ %>
 <%= Util.uriEncode(rev) %>"><%= basename %></a>
