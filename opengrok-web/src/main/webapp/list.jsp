@@ -1145,16 +1145,206 @@ body.lines-hidden .code-area pre span.unfold-icon {
  * fires — no manual bookkeeping needed.
  */
 document.pageReady.push(function() {
+    /* ── Legacy anchor shims (#content / #whole_header) ──
+     *
+     * ROOT CAUSE of the "Scopes / Navigate popups open but are empty".
+     *
+     * utils-0.0.48.js hardcodes two element ids that only existed in
+     * the OLD OpenGrok chrome and are NOT rendered by the refactored
+     * chrome (pageheader.jspf emits <header class="common-page-header">
+     * and list.jsp emits <main class="code-area">):
+     *
+     *   • `#content`      — used by scopesWindow.load()   (line 1159)
+     *                       and navigateWindow.getTopOffset() (line 1292)
+     *                       as `$("#content").offset().top`.
+     *                       On a page with no #content, jQuery returns
+     *                       an EMPTY set, `.offset()` yields undefined,
+     *                       and `undefined.top` throws a TypeError.
+     *                       That exception escapes from inside the
+     *                       plugin's `load` callback, so the rest of
+     *                       load() — and, for navigateWindow, the
+     *                       `update()` call that fills the body — never
+     *                       runs. Result: the frame renders (title bar
+     *                       + cream background, exactly as in the
+     *                       screenshot) but the body stays empty.
+     *
+     *   • `#whole_header` — used by scope_on_scroll() (line 2221) to
+     *                       compute the y coordinate to hit-test with
+     *                       document.elementFromPoint(15, y + 1). With
+     *                       no #whole_header, outerHeight() returns
+     *                       undefined → y is NaN → elementFromPoint
+     *                       returns null → the `.l/.hl` test never
+     *                       matches → scopesWindow.update() is never
+     *                       called → the Scopes body stays empty.
+     *
+     * Rather than patch the vendored utils js (which would be
+     * overwritten on upgrade), we render two zero-impact alias
+     * elements that map the legacy ids onto the new chrome:
+     *   #whole_header → the real sticky header block
+     *   #content      → the scrolling code area
+     * Both are only added when absent, so an upstream page that still
+     * has them is left untouched. */
+    (function _installLegacyAnchors() {
+        if (!document.getElementById('whole_header')) {
+            var hdr = document.querySelector('header.common-page-header');
+            if (hdr) {
+                hdr.id = 'whole_header';
+            }
+        }
+        if (!document.getElementById('content')) {
+            var area = document.getElementById('code-area');
+            if (area) {
+                area.id = 'content';
+                /* keep the old id working for our own selectors below */
+                area.classList.add('code-area');
+                area.setAttribute('data-alias-of', 'code-area');
+            }
+        }
+    })();
+
     /* Delegate the heavy lifting to the upstream pageReadyList(). It
      * already does everything the original Apache-tomcat deployment
      * did: initialises $.navigateWindow, populates it from
      * get_sym_list(), binds the #navigate click, and (through the
      * intelliWindow load callback) wires up the 1-8/n/b keyboard
-     * shortcuts and the hover handler on a.intelliWindow-symbol. */
-    if (typeof pageReadyList === 'function') {
-        pageReadyList();
-    } else if (document.highlight_count === undefined) {
-        document.highlight_count = 0;
+     * shortcuts and the hover handler on a.intelliWindow-symbol.
+     *
+     * Wrapped in try/catch: if any single plugin still throws, the
+     * remaining toolbar bindings below must still be installed. */
+    try {
+        if (typeof pageReadyList === 'function') {
+            pageReadyList();
+        } else if (document.highlight_count === undefined) {
+            document.highlight_count = 0;
+        }
+    } catch (err) {
+        console.error('[opengrok] pageReadyList() failed', err);
+        if (document.highlight_count === undefined) {
+            document.highlight_count = 0;
+        }
+    }
+
+    /* ── Populate the Navigate window explicitly ──
+     *
+     * SECOND ROOT CAUSE. pageReadyList() only fills the Navigate body
+     * when `get_sym_list` is a function. That function is emitted by
+     * the indexer INSIDE the dumped xref
+     * (JFlexXrefUtils.writeSymbolTable → "function get_sym_list(){…}"),
+     * i.e. it arrives as an inline <script> in the middle of the
+     * page. Two ways it goes missing here:
+     *
+     *   1. The xref is dumped through Util.dumpXref() from a stored
+     *      .gz xref file. Scripts injected via innerHTML-style DOM
+     *      writes are not executed, and even for a plain server-side
+     *      dump the definition only exists if the file HAS ctags
+     *      definitions.
+     *   2. `writeSymbolTable` is skipped entirely when the analyzer
+     *      produced no Definitions (economy mode / no ctags), in which
+     *      case get_sym_list never exists at all.
+     *
+     * When get_sym_list is missing the Navigate window is initialised
+     * but never receives an update() call → empty body. We therefore
+     * build the symbol list from the DOM itself as a fallback: every
+     * definition anchor in the xref carries `class="xf|xmt|xc|…"` plus
+     * a `name` attribute, which is exactly the data get_sym_list would
+     * have returned. */
+    function _symListFromDom() {
+        /* class → human readable group title, mirrors XrefStyle. */
+        var TITLES = {
+            xc:  'Class',      xi: 'Interface', xs: 'Struct',
+            xe:  'Enum',       xn: 'Namespace', xp: 'Package',
+            xf:  'Function',   xmt:'Method',    xm: 'Macro',
+            xv:  'Variable',   xfld:'Field',    xmb:'Member',
+            xt:  'Typedef',    xts:'Typedefs',  xu: 'Union',
+            xa:  'Annotation', xl: 'Label',     xsr:'Subroutine',
+            xer: 'Error',      xr: 'Reference'
+        };
+        var groups = {};
+        /* Definition anchors are emitted as <a class="xf" name="sym"/>
+         * immediately before the clickable reference anchor. Pick the
+         * ones that carry a name attribute — those are the defs. */
+        var nodes = document.querySelectorAll('#src a[name], #content a[name]');
+        for (var i = 0; i < nodes.length; i++) {
+            var a = nodes[i];
+            var nm = a.getAttribute('name');
+            if (!nm || /^\d+$/.test(nm)) {
+                continue;   // line-number anchor, not a definition
+            }
+            var cls = null;
+            for (var k = 0; k < a.classList.length; k++) {
+                if (TITLES[a.classList[k]]) { cls = a.classList[k]; break; }
+            }
+            if (!cls) {
+                continue;
+            }
+            /* Line number = the nearest preceding line anchor. */
+            var line = 0;
+            var prev = a;
+            while ((prev = prev.previousElementSibling)) {
+                if (prev.classList &&
+                        (prev.classList.contains('l') || prev.classList.contains('hl'))) {
+                    line = parseInt(prev.getAttribute('name'), 10) || 0;
+                    break;
+                }
+            }
+            (groups[cls] = groups[cls] || []).push([nm, line]);
+        }
+        var out = [];
+        Object.keys(groups).forEach(function (cls) {
+            groups[cls].sort(function (a, b) { return a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0); });
+            out.push([TITLES[cls], cls, groups[cls]]);
+        });
+        return out;
+    }
+
+    /* Fill Navigate if pageReadyList() left it empty. */
+    try {
+        if (window.jQuery && jQuery.navigateWindow && jQuery.navigateWindow.initialized) {
+            var list = (typeof get_sym_list === 'function') ? get_sym_list() : [];
+            if (!list || !list.length) {
+                list = _symListFromDom();
+            }
+            if (list && list.length) {
+                jQuery.navigateWindow.update(list);
+            } else {
+                /* Genuinely no symbols (plain text, JSON, no ctags data):
+                 * say so instead of showing a blank cream box. */
+                jQuery.navigateWindow.$content
+                    .empty()
+                    .append($('<h4>').text('No symbols for this file'));
+            }
+        }
+    } catch (err) {
+        console.error('[opengrok] navigate window population failed', err);
+    }
+
+    /* Seed the Scopes window once so it is never blank on first open.
+     * utils.js only fills it from scope_on_scroll(); if the user opens
+     * the window before scrolling, or the file has no scope-head
+     * elements at all, the body would stay empty. */
+    function _seedScopes() {
+        try {
+            if (!window.jQuery || !jQuery.scopesWindow || !jQuery.scopesWindow.initialized) {
+                return;
+            }
+            if (jQuery.scopesWindow.$scopes &&
+                    jQuery.scopesWindow.$scopes.children().length) {
+                return;     // already populated by scope_on_scroll()
+            }
+            var $head = $('#src .scope-head, #content .scope-head').first();
+            if ($head.length) {
+                jQuery.scopesWindow.update({
+                    id: $head.attr('id'),
+                    link: $head.children().first().html()
+                });
+            } else {
+                jQuery.scopesWindow.$scopes
+                    .empty()
+                    .append($('<span>').text('No scope at the top of the view'));
+            }
+        } catch (err) {
+            console.error('[opengrok] scopes seed failed', err);
+        }
     }
 
     /* After pageReadyList() runs, both $.navigateWindow and
@@ -1255,6 +1445,15 @@ document.pageReady.push(function() {
                 jQuery.scopesWindow.toggle();
                 const visible = jQuery.scopesWindow.is(':visible');
                 $btn.classList.toggle('active', visible);
+                if (visible) {
+                    /* Fill the body before the user sees it: utils.js
+                     * only updates on scroll, so a first-open without
+                     * any scrolling would show an empty cream box. */
+                    _seedScopes();
+                    if (typeof scope_on_scroll === 'function') {
+                        scope_on_scroll();
+                    }
+                }
                 _layoutPopups();
             } else {
                 console.warn('[opengrok] scopesWindow not initialised yet');
@@ -1276,6 +1475,20 @@ document.pageReady.push(function() {
                 jQuery.navigateWindow.toggle();
                 const visible = jQuery.navigateWindow.is(':visible');
                 $btn.classList.toggle('active', visible);
+                if (visible && jQuery.navigateWindow.$content &&
+                        jQuery.navigateWindow.$content.children().length === 0) {
+                    /* Late fill: the xref's inline get_sym_list() may
+                     * only have become available after pageReady ran. */
+                    const late = (typeof get_sym_list === 'function')
+                        ? get_sym_list() : _symListFromDom();
+                    if (late && late.length) {
+                        jQuery.navigateWindow.update(late);
+                    } else {
+                        jQuery.navigateWindow.$content
+                            .empty()
+                            .append($('<h4>').text('No symbols for this file'));
+                    }
+                }
                 _layoutPopups();
             } else if (window.jQuery && jQuery.intelliWindow) {
                 jQuery.intelliWindow.toggleAndMove();
@@ -1292,41 +1505,16 @@ document.pageReady.push(function() {
 
     /* ── Scopes / Navigate co-layout ──
      *
-     * utils-0.0.48.js (lines 1153, 1224) initialises both
-     * `$.scopesWindow` and `$.navigateWindow` with the SAME inline
-     * `css({ top: '150px', right: '20px' })`. The two jQuery-UI
-     * floating windows therefore live in the exact same corner of
-     * the viewport — opening the second one stacks on top of the
-     * first and the lower one disappears behind the upper one.
+     * utils-0.0.48.js initialises BOTH windows with the same inline
+     * `css({ top: '150px', right: '20px' })`, so they land in the exact
+     * same corner. utils.js only dodges this one way (when scopes opens
+     * first it nudges navigate below it); opening navigate first left
+     * scopes stacked directly on top of it.
      *
-     * utils-0.0.48.js attempts to dodge this for navigateWindow only
-     * (lines 1234-1248 + 1307-1310): when scopesWindow's `show`
-     * event fires, navigateWindow re-runs `updatePosition()` which
-     * moves navigate to `scopes.position().top + scopes.outerHeight()
-     * + 20`. That logic only works ONE WAY:
-     *
-     *   1. scopes opens FIRST, then navigate opens → updatePosition
-     *      correctly parks navigate below scopes. Works.
-     *   2. navigate opens FIRST, then scopes opens → utils.js never
-     *      nudges scopes, so scopes pops up at (150, 20) directly on
-     *      top of navigate. Both buttons show "active" but only one
-     *      popup is visible. Broken — matches the original report.
-     *
-     * Our fix: every time the user clicks Scopes or Navigate, run
-     * `_layoutPopups()` to enforce the rule "scopes above navigate".
-     * - scopes visible alone: park scopes at the default top.
-     * - navigate visible alone: park navigate at the default top.
-     * - both visible:           scopes at default top, navigate pinned
-     *                           just below scopes' outerHeight + 20px
-     *                           gap so they don't overlap.
-     * - neither visible:        leave them alone (the previous hide
-     *                           animation has already parked them off
-     *                           whatever position they had).
-     *
-     * We always pin via `.stop().animate({ top })` to match the
-     * behaviour utils.js uses elsewhere; .stop() prevents queues of
-     * pending animations from fighting each other when the user
-     * clicks the buttons quickly. */
+     * `_layoutPopups()` enforces "scopes above navigate" on every
+     * toggle: whichever is alone sits at DEFAULT_TOP, and when both are
+     * up navigate is pinned below scopes' outerHeight + GAP. We animate
+     * with .stop() so rapid clicks don't queue fighting animations. */
     function _layoutPopups() {
         if (!window.jQuery) return;
         const $scopes  = jQuery.scopesWindow;
@@ -1395,42 +1583,21 @@ document.pageReady.push(function() {
     });
 
     /* Goto Line: scroll the code area so the requested line is at the
-     * top, and highlight it (anchor format `#<line>` matches the
-     * anchors emitted by the dumped xref).
+     * top (anchor format `#<line>` matches the anchors emitted by the
+     * dumped xref).
      *
-     * Implementation note: the previous implementation used
-     *     $area.animate({ scrollTop: $area.scrollTop()
-     *                      + ($anchor.offset().top - $area.offset().top)
-     *                      - 16 }, 250);
-     * Two bugs combined to make it silently fail:
+     * We use the browser's native scrollIntoView() first — it walks up
+     * to the anchor's nearest scrolling ancestor, which works across
+     * the nested `overflow: auto` wrappers (.code-area > .code-content)
+     * that a manual jQuery scrollTop calculation got wrong. The
+     * explicit scrollTop() write afterwards is a fallback for browsers
+     * without options-object support.
      *
-     *   1. The new chrome wraps the xref in
-     *      `<main class="code-area" id="code-area">
-     *         <div class="code-content" id="code-content"> … </div>
-     *       </main>`
-     *      where `.code-content` carries its own `overflow: auto`
-     *      (rule ".code-area .code-content"). When that inner wrapper
-     *      is shorter than its child it doesn't actually scroll, so
-     *      the jQuery animate fires but the visible scrollTop of
-     *      #code-area never moves.
-     *
-     *   2. The formula added `$area.scrollTop()` to the delta, which
-     *      double-counted the existing scroll. `offset().top` is in
-     *      document-absolute coordinates, so subtracting
-     *      `$area.offset().top` already gives the in-content offset —
-     *      the current scroll position must NOT be added again.
-     *      When the user had scrolled into a long file, the result
-     *      was over `scrollHeight - clientHeight`, the browser
-     *      silently clamped it, and the view didn't move.
-     *
-     * We delegate to the browser's native
-     * scrollIntoView({ block: 'start' }) first — it walks up to the
-     * nearest scrolling ancestor of the anchor itself, which is
-     * #code-area, regardless of any intermediate wrapper. We then
-     * fall back to a direct scrollTop() write on #code-area using
-     * the corrected formula (anchorTop - areaTop - 16) so any older
-     * browser without options-object support still lands on the
-     * right line. */
+     * Formula note: `offset().top` is document-absolute, so
+     * `anchorTop - areaTop` already yields the in-content offset. Do
+     * NOT add the current scrollTop — doing so double-counts the
+     * existing scroll and the browser silently clamps the result
+     * (the old "URL changes but the view doesn't move" bug). */
     function _gotoLine() {
         const $input = $('#goto-line-input');
         const n = parseInt($input.val(), 10);
@@ -1463,62 +1630,7 @@ document.pageReady.push(function() {
         // container's document-absolute top gives the anchor's
         // in-content offset. That IS the scrollTop we want — no
         // current-scroll addition, no over-counting.
-        const $area = $('#code-area');
-        const anchorTop = $anchor.offset().top;
-        const areaTop = $area.offset().top;
-        if (Number.isFinite(anchorTop) && Number.isFinite(areaTop)) {
-            const target = (anchorTop - areaTop) - 16;
-            if (Number.isFinite(target)) {
-                $area.scrollTop(Math.max(0, target));
-            }
-        }
-
-        if (history.replaceState) {
-            history.replaceState(null, '', '#' + n);
-        } else {
-            location.hash = '#' + n;
-        }
-        return false;
-    }
-    $('#goto-line-btn').on('click', _gotoLine);
-    $('#goto-line-input').on('keydown', function(e) {
-        if (e.key === 'Enter' || e.keyCode === 13) {
-            return _gotoLine();
-        }
-    });
-    function _gotoLine() {
-        const $input = $('#goto-line-input');
-        const n = parseInt($input.val(), 10);
-        if (!n || n < 1) return false;
-        const $anchor = $('#src').find('a[name="' + n + '"]');
-        if (!$anchor.length) return false;
-
-        // Native scrollIntoView: lets the browser pick the right
-        // scroll container. behaviour:'smooth' gives the same 250ms-ish
-        // glide the old jQuery animate did, but works across nested
-        // overflow:auto wrappers that the jQuery formula did not.
-        try {
-            $anchor[0].scrollIntoView({ block: 'start', behavior: 'smooth' });
-        } catch (_) {
-            // Old browsers that don't accept the options object —
-            // fall back to the legacy signature.
-            $anchor[0].scrollIntoView();
-        }
-
-        // Belt-and-suspenders: also push #code-area itself so its
-        // scrollTop matches the anchor position, in case the inner
-        // .code-content wrapper absorbed some of the scroll instead.
-        //
-        // The previous formula added $area.scrollTop() to the delta,
-        // which double-counted the existing scroll (the offset of an
-        // element is already in document-absolute coords, so subtracting
-        // $area's offset.top gives the in-content offset directly).
-        // That double-counting was harmless when the area was at
-        // scrollTop 0, but if the user had already scrolled, it
-        // pushed the view off-screen (and silently failed when the
-        // result overflowed the scrollable range, which is why the
-        // symptom was "URL changes, view doesn't move").
-        const $area = $('#code-area');
+        const $area = $('#code-area, #content').first();
         const anchorTop = $anchor.offset().top;
         const areaTop = $area.offset().top;
         if (Number.isFinite(anchorTop) && Number.isFinite(areaTop)) {

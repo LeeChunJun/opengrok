@@ -231,109 +231,19 @@ body.lines-hidden .xref-paper pre span.unfold-icon {
     display: none !important;
 }
 
-/* ── Floating windows created by utils.js (Intelligence, Scopes,
- * Navigate) ──
- *
- * xref.jspf is rendered standalone in some paths (binary/image fallbacks
- * that bypass list.jsp). We duplicate the floating-window styles here
- * so the Intelligence / Scopes / Navigate windows still look right
- * when list.jsp's <style> block isn't on the page. Mirrors the rules
- * in list.jsp verbatim. */
-.window {
-    position: fixed;
-    font-size: 12px;
-    font-family: monospace;
-    overflow: hidden;
-    z-index: 10;
-}
-.window-header {
-    padding: 10px;
-    min-height: 20px;
-    border-bottom: 1px solid black;
-}
-.window-body {
-    overflow: auto;
-    height: calc(100% - 40px - 1px - 20px);
-    padding: 10px 10px 10px 10px;
-    width: calc(100% - 20px);
-}
-.intelli-window {
-    width: 504px;
-    max-height: 400px;
-}
-.scopes-window {
-    min-width: 150px;
-    max-width: 40%;
-    max-height: 400px;
-}
-.navigate-window {
-    min-width: 200px;
-    max-width: 300px;
-    max-height: 480px;
-}
-.diff_navigation_style {
-    border: solid 1px var(--og-border, #dddddd);
-    border-radius: 5px;
-    box-shadow: 10px 10px 5px var(--og-popup-shadow, #888888);
-    background-color: rgb(255, 255, 204);
-}
-.symbol-highlighted.hightlight-color-1 { background-color: #ffd700; }
-.symbol-highlighted.hightlight-color-2 { background-color: #00ff00; }
-.symbol-highlighted.hightlight-color-3 { background-color: #00ccff; }
-.symbol-highlighted.hightlight-color-4 { background-color: #F653F8; }
-.symbol-highlighted.hightlight-color-5 { background-color: rgb(242, 132, 34); }
-.symbol-highlighted.hightlight-color-6 { background-color: #B6EBB5; }
-#intelli_win, #scopes_win, #navigate_win {
-    background-color: rgb(255, 255, 204);
-}
-#intelli_win .window-body,
-#scopes_win .window-body,
-#navigate_win .window-body {
-    background-color: rgb(255, 255, 204);
-}
-#intelli_win a, #scopes_win a, #navigate_win a {
-    color: #0000ee;
-    text-decoration: underline;
-}
-#intelli_win a:hover, #scopes_win a:hover, #navigate_win a:hover {
-    color: #ff5500;
-}
-#intelli_win b.symbol-name,
-#scopes_win b.symbol-name,
-#navigate_win b.symbol-name {
-    font-weight: 700;
-    color: inherit;
-}
-#intelli_win h2, #intelli_win h5,
-#scopes_win h2, #scopes_win h5,
-#navigate_win h2, #navigate_win h5 {
-    color: #333;
-    margin: 6px 0 4px;
-    font-size: 12px;
-}
-#intelli_win h2 {
-    font-size: 16px;
-    font-weight: 700;
-}
-#intelli_win ul, #scopes_win ul, #navigate_win ul {
-    margin: 0 0 8px;
-    padding-left: 20px;
-    list-style: disc;
-}
-#intelli_win li, #scopes_win li, #navigate_win li {
-    line-height: 1.7;
-}
-#intelli_win hr, #scopes_win hr, #navigate_win hr {
-    border: 0;
-    border-top: 1px solid #c0c0c0;
-    margin: 6px 0;
-}
-#intelli_win .pull-right, #scopes_win .pull-right, #navigate_win .pull-right {
-    float: right;
-}
-#intelli_win .clearfix, #scopes_win .clearfix, #navigate_win .clearfix {
-    clear: both;
-}
+/* NOTE: the floating-window styles (.window / .window-header /
+ * .window-body / .intelli-window / .scopes-window / .navigate-window /
+ * .diff_navigation_style / .symbol-highlighted.* / #intelli_win /
+ * #scopes_win / #navigate_win) used to be duplicated here verbatim
+ * from list.jsp. They were removed: this fragment is pulled in by a
+ * static include directive ONLY from list.jsp's code-view branch,
+ * and that page always emits those rules itself in its own style
+ * block. Keeping two identical copies in the same document doubled
+ * the CSS payload on every source-file page and meant any future
+ * tweak had to be made in two places. If this fragment is ever
+ * included by a page that does NOT carry list.jsp's chrome, move the
+ * shared rules into httpheader.jspf rather than re-duplicating them
+ * here. */
 
 /* xref error block (emitted by xref.jspf when reading fails). Pairs
  * with the .xref-paper card style so the error state visually matches
@@ -512,7 +422,6 @@ PageConfig xrefCfg = PageConfig.get(request);
                 }
             }
     %></pre>
-    </div>
 </div><%
         } else {
 %>
