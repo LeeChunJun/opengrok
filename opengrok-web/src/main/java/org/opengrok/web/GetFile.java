@@ -95,7 +95,29 @@ public class GetFile extends HttpServlet {
             if (cfg.getPrefix() == Prefix.DOWNLOAD_P) {
                 response.setHeader("content-disposition", "attachment; filename=" + f.getName());
             } else {
-                response.setHeader("content-type", "text/plain");
+                /* Raw view: force `text/plain; charset=UTF-8`.
+                 *
+                 * The previous code did
+                 *   response.setHeader("content-type", "text/plain");
+                 * which OVERRIDES the mimeType set above AND drops the
+                 * charset — `setHeader` writes the raw header value
+                 * verbatim and does NOT consult the response's
+                 * character encoding (which the CharacterEncodingFilter
+                 * has already set to UTF-8). The browser therefore
+                 * receives `Content-Type: text/plain` (no charset) and
+                 * renders the bytes with its default text/plain
+                 * encoding, which on Chrome/Edge/Firefox is usually
+                 * Windows-1252 (or "browser default") rather than
+                 * UTF-8 — so any CJK / extended-Latin character in
+                 * the file shows up as `å¼ ä¸­æ–‡`-style mojibake.
+                 *
+                 * Using `setContentType("text/plain; charset=UTF-8")`
+                 * instead makes the browser always decode the bytes
+                 * as UTF-8, matching how the source files are stored
+                 * on disk (the indexer reads them with UTF-8 by
+                 * default — see PageConfig#readFile and
+                 * IOUtils#createBOMStrippedReader). */
+                response.setContentType("text/plain; charset=UTF-8");
             }
             OutputStream o = response.getOutputStream();
             byte[] buffer = new byte[8192];

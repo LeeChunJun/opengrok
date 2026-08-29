@@ -600,11 +600,84 @@ body.lines-hidden .code-area pre span.unfold-icon {
     background: rgb(255, 255, 204);
     background-color: rgb(255, 255, 204);
 }
+/* Per-symbol colour rules for the Navigate window.
+ *
+ * The Navigate window renders each definition as
+ *   <a class="xc|xm|xv|…" href="#line">name</a>
+ * inside <h4>Variable / Function / …</h4> groups. The class name on
+ * each <a> is the same XrefStyle.ssClass used by the xref dump, so
+ * the colour rules below mirror the per-class colours defined
+ * elsewhere (`.code-area pre a.xm`, `.xref-paper a.xm`, …) and
+ * restore the orange/red/purple/green/blue distinction the original
+ * deployment showed.
+ *
+ * Specificity: `#navigate_win a.xc` is (0, 2, 2) and beats the
+ * generic `a` selector (0, 0, 1), so per-class colour wins on every
+ * link with a symbol class. For links without one (e.g. the
+ * IntelliScence window's "Search" / "Google" controls, the Scopes
+ * window's enclosing-scope link) the fallback `a` rule below kicks
+ * in and paints them in the OpenGrok default link blue (#0000ee). */
+#navigate_win a.xm   { color: #c66; font-weight: 700; }
+#navigate_win a.xa   { color: #60c; font-weight: 700; }
+#navigate_win a.xl   { color: #963; font-weight: 700; }
+#navigate_win a.xv   { color: #c30; font-weight: 700; }
+#navigate_win a.xc   { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xp   { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xi   { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xn   { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xe   { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xer  { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xs   { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xt   { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xts  { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xu   { color: #909; font-weight: 700; font-style: italic; }
+#navigate_win a.xfld { color: #090; font-weight: 700; }
+#navigate_win a.xmb  { color: #090; font-weight: 700; }
+#navigate_win a.xf   { color: #00f; font-weight: 700; }
+#navigate_win a.xmt  { color: #00f; font-weight: 700; }
+#navigate_win a.xsr  { color: #00f; font-weight: 700; }
+#navigate_win a.xlbl { color: red;  font-weight: 700; background-color: yellow; }
+#navigate_win a.xr   { color: #909; font-weight: 700; }
+#navigate_win a.d    { color: #909; font-weight: 700; }
+#navigate_win a.scope{ color: steelblue; font-weight: 700; padding-left: 1ex; }
+/* Generic link styling for the IntelliScence + Scopes windows (and
+ * for any Navigate link without a symbol class). The per-class rules
+ * above have higher specificity and override this for symbols.
+ *
+ * Belt-and-suspenders: redeclare `color: #0000ee` for `:focus` and
+ * `:active` so the IntelliScence action links (Highlight /
+ * Unhighlight / Search / Google) don't drop to the browser's
+ * default focus colour when the user tabs onto them. The default
+ * focus colour is usually a slightly different shade (or, on some
+ * Chromium themes, plain black) which makes the link look broken
+ * next to the un-focused ones above it. */
 #intelli_win a,
+#intelli_win a:focus,
+#intelli_win a:active,
 #scopes_win a,
-#navigate_win a {
+#scopes_win a:focus,
+#scopes_win a:active,
+#navigate_win a:not(.xm):not(.xa):not(.xl):not(.xv):not(.xc):not(.xp):not(.xi):not(.xn):not(.xe):not(.xer):not(.xs):not(.xt):not(.xts):not(.xu):not(.xfld):not(.xmb):not(.xf):not(.xmt):not(.xsr):not(.xlbl):not(.xr):not(.d):not(.scope),
+#navigate_win a:not(.xm):not(.xa):not(.xl):not(.xv):not(.xc):not(.xp):not(.xi):not(.xn):not(.xe):not(.xer):not(.xs):not(.xt):not(.xts):not(.xu):not(.xfld):not(.xmb):not(.xf):not(.xmt):not(.xsr):not(.xlbl):not(.xr):not(.d):not(.scope):focus,
+#navigate_win a:not(.xm):not(.xa):not(.xl):not(.xv):not(.xc):not(.xp):not(.xi):not(.xn):not(.xe):not(.xer):not(.xs):not(.xt):not(.xts):not(.xu):not(.xfld):not(.xmb):not(.xf):not(.xmt):not(.xsr):not(.xlbl):not(.xr):not(.d):not(.scope):active {
     color: #0000ee;
     text-decoration: underline;
+    display: inline-block;
+}
+/* Scopes window: the body contains a single `<a>` built by utils.js's
+ * buildLink(id, name) — that link is the only thing the user sees
+ * inside the popup. Force it to display as a proper clickable link
+ * (blue + underline + block so it stretches the full width of the
+ * body and is easy to click): the previous inline-block rule already
+ * turns it into a click target, but in some browsers the inline-block
+ * container of the scope-signature span collapses to zero height when
+ * the only child is a hidden span, so the user can't click the empty
+ * area. `min-height: 1.5em` + `padding: 4px 0` guarantees the link is
+ * always at least one line tall. */
+#scopes_win a {
+    min-height: 1.5em;
+    padding: 4px 0;
+    word-break: break-word;
 }
 #intelli_win a:hover,
 #scopes_win a:hover,
@@ -618,18 +691,42 @@ body.lines-hidden .code-area pre span.unfold-icon {
     color: inherit;
 }
 #intelli_win h2,
+#intelli_win h4,
 #intelli_win h5,
 #scopes_win h2,
+#scopes_win h4,
 #scopes_win h5,
 #navigate_win h2,
+#navigate_win h4,
 #navigate_win h5 {
     color: #333;
     margin: 6px 0 4px;
     font-size: 12px;
+    font-weight: 700;
 }
 #intelli_win h2 {
     font-size: 16px;
     font-weight: 700;
+    font-family: monospace;
+}
+
+/* Remove the browser's default focus ring on the close button.
+ *
+ * utils.js appends `<a href="#" class="minimize">x</a>` as the
+ * close button on every floating window. After the user clicks it,
+ * browsers draw the default :focus outline OUTSIDE the button's
+ * 2px-outset border (visible in the screenshot as a small black
+ * rectangle around the "x"). The original OpenGrok stylesheet
+ * doesn't suppress it explicitly because the legacy chrome used a
+ * table-based layout with different focus behaviour; in the
+ * refactored chrome the focus ring is jarring and clearly an
+ * accessibility regression. `outline: 0` is the OpenGrok-standard
+ * way to silence it (same pattern as the `.goto-line-input` rule
+ * further up in this stylesheet). */
+.diff_navigation_style .minimize:focus,
+.diff_navigation_style .minimize:active,
+.diff_navigation_style .minimize {
+    outline: none;
 }
 #intelli_win ul,
 #scopes_win ul,
@@ -1020,7 +1117,7 @@ body.lines-hidden .code-area pre span.unfold-icon {
             <button class="toolbar-btn" id="btn-line"><svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg><span>Line</span></button>
             <button class="toolbar-btn" id="btn-scopes"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Scopes</span></button>
             <button class="toolbar-btn" id="btn-navigate"><svg viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg><span>Navigate</span></button>
-            <button class="toolbar-btn" id="btn-raw"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span>Raw</span></button>
+            <button class="toolbar-btn" id="btn-raw" data-raw-href="<%= rawHref %>"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span>Raw</span></button>
             <a href="<%= dlHref %>" class="toolbar-btn" id="btn-download"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download</span></a>
         </div>
         <div class="code-toolbar-right">
@@ -1140,9 +1237,13 @@ body.lines-hidden .code-area pre span.unfold-icon {
  * mouseover handler on `a.intelliWindow-symbol`, and the `$('#navigate')`
  * click binding that the rest of the code base relies on.
  *
- * The `.active` class on a toolbar button is synced to its window's
- * `:visible` state via the `show`/`hide` jQuery events the plugin
- * fires — no manual bookkeeping needed.
+ * The Scopes / Navigate toolbar buttons intentionally do NOT keep a
+ * mirrored `.active` class — the popup's own close (x) button hides
+ * it without going through the toolbar, so any `.active` class on
+ * the button would drift the moment the user dismisses the popup via
+ * its built-in close control. The popup owns its own show/hide state
+ * and the toolbar acts as a plain toggle, matching the original
+ * OpenGrok chrome's behaviour.
  */
 document.pageReady.push(function() {
     /* ── Legacy anchor shims (#content / #whole_header) ──
@@ -1180,15 +1281,53 @@ document.pageReady.push(function() {
      * Rather than patch the vendored utils js (which would be
      * overwritten on upgrade), we render two zero-impact alias
      * elements that map the legacy ids onto the new chrome:
-     *   #whole_header → the real sticky header block
+     *   #whole_header → the LAST sibling before the code area
+     *                   (logo header + compact-nav + breadcrumb; see
+     *                   the function body for why we tag the LAST
+     *                   one rather than just the logo header)
      *   #content      → the scrolling code area
      * Both are only added when absent, so an upstream page that still
      * has them is left untouched. */
     (function _installLegacyAnchors() {
         if (!document.getElementById('whole_header')) {
-            var hdr = document.querySelector('header.common-page-header');
-            if (hdr) {
-                hdr.id = 'whole_header';
+            /* The original Apache-tomcat deployment put EVERYTHING
+             * (logo + compact-nav + breadcrumb) under one element
+             * with id="whole_header", and utils.js's scope_on_scroll()
+             * reads `$('#whole_header').outerHeight() + 2` to compute
+             * the y-coordinate for `elementFromPoint(15, y + 1)`. The
+             * outerHeight() therefore needed to include the full
+             * stacked header — logo + nav + breadcrumb — so that the
+             * hit-test landed INSIDE the dumped-xref area below.
+             *
+             * The refactored chrome splits those three blocks into
+             * separate siblings (<header.common-page-header>,
+             * mast.jsp's <div class="compact-nav">, breadcrumb.jspf's
+             * <nav class="dir-path">). Tagging only the logo header
+             * leaves the hit-test pointing at the compact-nav (which
+             * has no `.l` line anchors), so scope_on_scroll() exits
+             * early and the Scopes window is never populated — the
+             * exact "Scopes is empty" symptom in the bug report.
+             *
+             * Fix: walk down through every chrome sibling until we
+             * find a sibling that actually contains a `#code-area` /
+             * `#src` descendant, and tag the one JUST BEFORE it. That
+             * way `outerHeight()` spans the full chrome stack and
+             * `y + 1` lands inside the dumped xref. Falls back to the
+             * logo header on pages with no code area (e.g. directory
+             * listings). */
+            var code = document.getElementById('code-area') ||
+                       document.getElementById('content') ||
+                       document.getElementById('src');
+            var tag = document.querySelector('header.common-page-header');
+            if (code && tag) {
+                var n = tag.nextElementSibling;
+                while (n && !n.contains(code) && n !== code) {
+                    tag = n;
+                    n = n.nextElementSibling;
+                }
+            }
+            if (tag) {
+                tag.id = 'whole_header';
             }
         }
         if (!document.getElementById('content')) {
@@ -1321,7 +1460,16 @@ document.pageReady.push(function() {
     /* Seed the Scopes window once so it is never blank on first open.
      * utils.js only fills it from scope_on_scroll(); if the user opens
      * the window before scrolling, or the file has no scope-head
-     * elements at all, the body would stay empty. */
+     * elements at all, the body would stay empty.
+     *
+     * utils.js's buildLink() generates
+     *   <a href="#${id}" title="${name}">${name}</a>
+     * and it shows the WHOLE enclosing scope at the top of the view,
+     * not just the innermost scope-head. For a typical C file that's
+     * "<global scope> → file-level → function" — three nested anchors
+     * stacked. Our xref dump only emits one .scope-head per function,
+     * so the seed picks the first one (the outermost) which is the
+     * correct behaviour to match the original deployment. */
     function _seedScopes() {
         try {
             if (!window.jQuery || !jQuery.scopesWindow || !jQuery.scopesWindow.initialized) {
@@ -1331,11 +1479,36 @@ document.pageReady.push(function() {
                     jQuery.scopesWindow.$scopes.children().length) {
                 return;     // already populated by scope_on_scroll()
             }
-            var $head = $('#src .scope-head, #content .scope-head').first();
+            /* Look for .scope-head under #src (the refactored chrome
+             * emits it), then fall back to #content (alias), then to
+             * #code-area (the real id before the shim ran). Picking
+             * the FIRST .scope-head matches the original deployment,
+             * which shows the outermost enclosing scope. */
+            var $head = $('#src .scope-head, #content .scope-head, #code-area .scope-head').first();
             if ($head.length) {
+                /* buildLink() expects a child element whose .html() is
+                 * the link label. The xref dump emits the
+                 * scope-signature <span> as the first child of each
+                 * .scope-head; reading its html() is what the
+                 * original utils.js code did inside scope_on_scroll()
+                 * (see utils-0.0.47.js line 2232).
+                 *
+                 * The scope-signature content is the FULL signature
+                 * (name + parameters), e.g. "sample_hbp_handler(struct
+                 * perf_event * bp, …)" — which on a wide line is wider
+                 * than the scopes-window's max-width and forces a
+                 * wrap that makes the popup look broken. Strip it down
+                 * to just the leading identifier (the function name)
+                 * by taking the text up to the first opening paren,
+                 * matching what the original OpenGrok toolbar showed
+                 * in the legacy chrome. If the signature has no
+                 * parentheses, fall back to the first 80 chars. */
+                var rawHtml = ($head.children().first().html() || $head.text() || '').trim();
+                var parenIdx = rawHtml.indexOf('(');
+                var shortName = (parenIdx > 0 ? rawHtml.substring(0, parenIdx) : rawHtml.substring(0, 80)).trim();
                 jQuery.scopesWindow.update({
                     id: $head.attr('id'),
-                    link: $head.children().first().html()
+                    link: shortName
                 });
             } else {
                 jQuery.scopesWindow.$scopes
@@ -1346,6 +1519,90 @@ document.pageReady.push(function() {
             console.error('[opengrok] scopes seed failed', err);
         }
     }
+    /* Update the Scopes window to show the scope that contains the
+     * line currently at the top of the code viewport. This mirrors
+     * what the original `scope_on_scroll()` does in utils-0.0.47.js,
+     * but uses `getBoundingClientRect()` instead of
+     * `document.elementFromPoint()` because the refactored chrome
+     * has a 16px top padding on `.code-content` that shifts the first
+     * line anchor out of the `outerHeight() + 2` y coordinate the
+     * vendored function tests. As a result, in the new chrome
+     * `elementFromPoint()` returns `.code-content` itself (the padded
+     * wrapper) instead of a `.l`/`.hl` line anchor, the `.is('.l,
+     * .hl')` check fails, and the popup never updates to the current
+     * scroll position — which is exactly the "Scopes shows the wrong
+     * scope" bug the user reported.
+     *
+     * Iteration over `.l`/`.hl` `getBoundingClientRect()` is robust
+     * to any future padding/border changes between the chrome and
+     * the code area, and walks DOM siblings (a line is a sibling of
+     * its enclosing scope, NOT a descendant in the xref dump — the
+     * scope spans are inline `<span>`s that wrap line anchors) so
+     * `closest('.scope-body, .scope-head')` still resolves to the
+     * correct scope. */
+    function _scopeAtViewportTop() {
+        try {
+            if (!window.jQuery || !jQuery.scopesWindow || !jQuery.scopesWindow.initialized) {
+                return;
+            }
+            var $wh = $('#whole_header');
+            if (!$wh.length) return;
+            var chromeBottom = $wh.offset().top + $wh.outerHeight();
+            /* `.l`/`.hl` may live inside `.scope-body` (a `<span>`
+             * wrapping every body line) or directly under the
+             * `.scope-head` (the head + the body-wrap line). Pick the
+             * first one whose top is at or below the chrome bottom. */
+            var $lines = $('#src .l, #src .hl, #content .l, #content .hl');
+            var target = null;
+            for (var i = 0; i < $lines.length; i++) {
+                var el = $lines[i];
+                var rect = el.getBoundingClientRect();
+                if (rect.top >= chromeBottom - 1) {
+                    target = el;
+                    break;
+                }
+            }
+            if (!target) {
+                /* No line is yet visible (very first paint, before
+                 * layout settles). Defer to the seed as a graceful
+                 * fallback so the user sees SOMETHING rather than
+                 * a blank cream box. */
+                _seedScopes();
+                return;
+            }
+            var $par = $(target).closest('.scope-body, .scope-head');
+            if (!$par.length) {
+                /* Line is outside any scope (top of the file, before
+                 * the first function). Show the first scope-head as
+                 * a sensible default — same fallback as
+                 * _seedScopes(). */
+                _seedScopes();
+                return;
+            }
+            var $head = $par.hasClass('scope-body') ? $par.prev() : $par;
+            var $sig = $head.children().first();
+            var rawHtml = ($sig.html() || $head.text() || '').trim();
+            var parenIdx = rawHtml.indexOf('(');
+            var shortName = (parenIdx > 0 ? rawHtml.substring(0, parenIdx) : rawHtml.substring(0, 80)).trim();
+            jQuery.scopesWindow.update({
+                id: $head.attr('id'),
+                link: shortName
+            });
+        } catch (err) {
+            console.error('[opengrok] scope-at-viewport-top failed', err);
+            _seedScopes();
+        }
+    }
+    /* Pre-populate the Scopes window so the first click on the
+     * toolbar button already shows content rather than a blank cream
+     * box. Without this initial call the user would see an empty
+     * Scopes window until the page scrolls (utils.js's scope_on_scroll
+     * is the only path that updates the body). Calling it now puts
+     * the data in place before the user opens the window; the
+     * `if (jQuery.scopesWindow.$scopes.children().length)` guard
+     * inside _seedScopes() short-circuits any later update from
+     * scope_on_scroll(). */
+    _seedScopes();
 
     /* After pageReadyList() runs, both $.navigateWindow and
      * $.scopesWindow exist (scopesWindow was created earlier by the
@@ -1400,8 +1657,12 @@ document.pageReady.push(function() {
     /* ── Toolbar button handlers ──
      *
      * Each button is a thin wrapper around the utils.js plugin it
-     * controls. We sync the `.active` class with the window's
-     * `:visible` state via the `show`/`hide` events utils.js fires. */
+     * controls. The Line button still toggles an `.active` class to
+     * mirror the gutter's `lines-hidden` body class (the user has no
+     * other way to tell from the toolbar that the gutter is hidden);
+     * the Scopes / Navigate buttons intentionally do NOT, since the
+     * popup's own close (x) button can hide the window out-of-band
+     * and the mirrored class would drift immediately. */
 
     /* Annotate: mirrors utils.js `get_annotations()`. When the JSP
      * has already computed a href (annotHref / xannotateHref), the
@@ -1434,25 +1695,37 @@ document.pageReady.push(function() {
      * by the jQuery-UI Window plugin's `init` callback (utils-0.0.48.js
      * line 664) — once the plugin has run, `$.scopesWindow.toggle()`
      * works regardless of any internal `initialized` flag. We therefore
-     * call it as long as the object exists. We also flip the button's
-     * `.active` class synchronously so the visual stays in sync even
-     * if the `show`/`hide` events are silenced for some reason. */
+     * call it as long as the object exists.
+     *
+     * NOTE: the button itself intentionally does NOT keep an `.active`
+     * class in sync with the popup's visibility. utils.js installs
+     * its own popup-control and the close (x) link on the floating
+     * window hides it without going through the toolbar button, so a
+     * button-side `.active` mirror would drift out of sync as soon as
+     * the user closes the popup via its own close button. The toolbar
+     * therefore behaves as a plain toggle (like "Raw" and "Download"
+     * in the original OpenGrok chrome) and lets the popup own its own
+     * show/hide state. */
     document.getElementById('btn-scopes').addEventListener('click', function(e) {
         e.preventDefault();
-        const $btn = document.getElementById('btn-scopes');
         try {
             if (window.jQuery && jQuery.scopesWindow) {
                 jQuery.scopesWindow.toggle();
-                const visible = jQuery.scopesWindow.is(':visible');
-                $btn.classList.toggle('active', visible);
-                if (visible) {
-                    /* Fill the body before the user sees it: utils.js
-                     * only updates on scroll, so a first-open without
-                     * any scrolling would show an empty cream box. */
-                    _seedScopes();
-                    if (typeof scope_on_scroll === 'function') {
-                        scope_on_scroll();
-                    }
+                if (jQuery.scopesWindow.is(':visible')) {
+                    /* Show the scope that contains the line currently
+                     * at the top of the code viewport — i.e. whichever
+                     * function the user is looking at. We use our own
+                     * `_scopeAtViewportTop()` rather than the vendored
+                     * `scope_on_scroll()` because the new chrome adds
+                     * 16px of top padding on `.code-content`, which
+                     * makes the vendored function's
+                     * `elementFromPoint(outerHeight() + 2)` miss every
+                     * line anchor and leave the popup on whatever
+                     * _seedScopes() last wrote. Walking the
+                     * `.l`/`.hl` rects is layout-agnostic and runs
+                     * synchronously, so the popup updates in the same
+                     * frame as the click. */
+                    _scopeAtViewportTop();
                 }
                 _layoutPopups();
             } else {
@@ -1466,16 +1739,20 @@ document.pageReady.push(function() {
 
     /* Navigate: toggle the jQuery-UI navigateWindow that pageReadyList
      * creates (it also binds $('\#navigate').click → toggle, so the
-     * hidden <a id="navigate"> we render above also works). */
+     * hidden <a id="navigate"> we render above also works).
+     *
+     * NOTE: same rationale as btn-scopes — the button intentionally
+     * does NOT keep an `.active` class in sync. The popup's own close
+     * (x) button hides it without going through the toolbar, so a
+     * mirrored `.active` class would drift the moment the user
+     * dismisses the popup via its built-in close control. */
     document.getElementById('btn-navigate').addEventListener('click', function(e) {
         e.preventDefault();
-        const $btn = document.getElementById('btn-navigate');
         try {
             if (window.jQuery && jQuery.navigateWindow) {
                 jQuery.navigateWindow.toggle();
-                const visible = jQuery.navigateWindow.is(':visible');
-                $btn.classList.toggle('active', visible);
-                if (visible && jQuery.navigateWindow.$content &&
+                if (jQuery.navigateWindow.is(':visible') &&
+                        jQuery.navigateWindow.$content &&
                         jQuery.navigateWindow.$content.children().length === 0) {
                     /* Late fill: the xref's inline get_sym_list() may
                      * only have become available after pageReady ran. */
@@ -1492,8 +1769,6 @@ document.pageReady.push(function() {
                 _layoutPopups();
             } else if (window.jQuery && jQuery.intelliWindow) {
                 jQuery.intelliWindow.toggleAndMove();
-                const visible = jQuery.intelliWindow.is(':visible');
-                $btn.classList.toggle('active', visible);
             } else {
                 console.warn('[opengrok] navigateWindow not initialised yet');
             }
@@ -1565,20 +1840,63 @@ document.pageReady.push(function() {
                             .on('hide', _layoutPopups);
     }
 
-    /* The Scopes/Navigate .active class is now toggled directly inside
-     * each button's click handler (synchronous with the show()/hide()
-     * call), so we don't need any deferred sync code. */
+    /* The Scopes / Navigate buttons intentionally do NOT carry a
+     * mirrored `.active` class. The popup's own close (x) link can
+     * hide the window out-of-band (without going through the toolbar
+     * button), so a button-side `.active` mirror would drift as soon
+     * as the user dismissed the popup that way. The toolbar therefore
+     * acts as a plain toggle and lets the popup own its own show/hide
+     * state — matching the original OpenGrok chrome's behaviour. */
 
-    /* Raw: replace the rendered xref with the plain file contents. The
-     * original utility toggled a "raw mode" class on the <pre> so all
-     * syntax colouring is dropped; we replicate that on `.code-area`
-     * (which is the wrapper that holds the dumped xref) and re-trigger
-     * the spaces plugin so line numbers stay in sync. */
-    $('#btn-raw').on('click', function() {
-        const $area = $('#code-area');
-        const goingRaw = !$area.hasClass('raw-mode');
-        $area.toggleClass('raw-mode', goingRaw);
-        $(this).toggleClass('active', goingRaw);
+    /* Raw: navigate to the /raw/ URL of the current file so the browser
+     * renders the plain file contents directly. The OpenGrok Raw
+     * servlet (mapped under /raw/* by web.xml) serves the source
+     * without any xref decoration. Clicking the toolbar button a
+     * second time on the raw page navigates BACK to the xref view by
+     * stripping the /raw/ prefix off the current URL.
+     *
+     * This matches the behaviour of the original OpenGrok deployment,
+     * where the "Raw" menu entry was a plain `<a href="/raw/...">`
+     * link and the only way to come back was the browser's back
+     * button or a manual navigation — here we additionally offer a
+     * one-click toggle so the toolbar button doubles as a round-trip
+     * switch.
+     *
+     * The button stores the destination URL on data-raw-href (set in
+     * the JSP above) so we don't have to recompute the path/revision
+     * pair from the DOM — that recomputation would also be brittle if
+     * someone renamed or moved the file between requests. */
+    $('#btn-raw').on('click', function(e) {
+        e.preventDefault();
+        const btn = this;
+        const rawHref = btn.getAttribute('data-raw-href');
+        if (!rawHref) {
+            console.warn('[opengrok] btn-raw: missing data-raw-href');
+            return false;
+        }
+        const currentPath = window.location.pathname;
+        /* The /raw/ prefix maps 1:1 to /xref/ via OpenGrok's
+         * URL routing (web.xml mounts both servlets under the same
+         * path scheme: /raw/foo.c ↔ /xref/foo.c). Detect a raw URL
+         * by checking for the /raw/ segment and swapping it for
+         * /xref/ on click to toggle back. */
+        const isOnRaw = currentPath.indexOf('/raw/') !== -1;
+        if (isOnRaw) {
+            /* On the raw page — toggle back to xref. Strip the
+             * /raw/ segment from the current URL, keep the query
+             * string (which may carry ?r=<rev>) intact, and
+             * navigate. */
+            const xrefPath = currentPath.replace('/raw/', '/xref/');
+            const target = xrefPath + (window.location.search || '') +
+                           (window.location.hash || '');
+            window.location.href = target;
+        } else {
+            /* On the xref page — toggle to raw. The data-raw-href
+             * attribute is built from the same UriEncodedPath +
+             * revision params we used for the breadcrumb so it stays
+             * in sync with whatever the page rendered. */
+            window.location.href = rawHref;
+        }
         return false;
     });
 
