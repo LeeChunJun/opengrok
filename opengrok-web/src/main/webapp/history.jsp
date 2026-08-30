@@ -172,7 +172,7 @@ main.container {
     font-size: 12.5px;
     white-space: nowrap;
     vertical-align: bottom;
-    background: #fafbfc;
+    background: #e0d9ac;
 }
 .history-table thead th .filelist-toggle-anchor {
     float: right;
