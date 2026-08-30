@@ -548,9 +548,26 @@ body.lines-hidden .code-area pre span.unfold-icon {
     z-index: 10;
 }
 .window-header {
-    padding: 10px;
+    padding: 5px 10px;
     min-height: 20px;
-    border-bottom: 1px solid black;
+    border-bottom: 1px solid #c0c0c0;
+    background: #eeeebb;
+    background-color: #eeeebb;
+}
+.window-header .pull-left {
+    float: left;
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+}
+.window-header .pull-right {
+    float: right;
+}
+.window-header .clearfix::after {
+    content: "";
+    display: table;
+    clear: both;
 }
 .window-body {
     overflow: auto;
@@ -616,8 +633,8 @@ body.lines-hidden .code-area pre span.unfold-icon {
 #intelli_win .window-header,
 #scopes_win .window-header,
 #navigate_win .window-header {
-    background: rgb(255, 255, 204);
-    background-color: rgb(255, 255, 204);
+    background: #eeeebb;
+    background-color: #eeeebb;
 }
 #intelli_win .window-body,
 #scopes_win .window-body,
@@ -766,17 +783,20 @@ body.lines-hidden .code-area pre span.unfold-icon {
 .diff_navigation_style .minimize {
     outline: none;
     text-decoration: none;
-    color: inherit;
-    background: transparent;
-    border: 0;
+    color: #333;
+    background: #fff;
+    background-color: #fff;
+    border: 1px solid #999;
+    border-radius: 3px;
     padding: 0 6px;
     font-weight: bold;
-    font-size: 14px;
-    line-height: 1;
+    font-size: 12px;
+    line-height: 1.4;
     cursor: pointer;
 }
 .diff_navigation_style .minimize:hover {
-    color: #cf222e;
+    background: #ffebe9;
+    background-color: #ffebe9;
 }
 #intelli_win ul,
 #scopes_win ul,
