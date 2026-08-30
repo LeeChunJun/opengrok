@@ -268,6 +268,31 @@ main.container { max-width: 1200px; margin: 0 auto; padding: 24px; box-sizing: b
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
+    /* Sticky toolbar — match the legacy OpenGrok behaviour where
+     * the file-toolbar (Annotate / Line / Scopes / Navigate / Raw /
+     * Download / Line:) sticks to the top of the viewport while
+     * the user scrolls through the dumped xref. Without this the
+     * toolbar scrolls out of view and the user has to scroll back
+     * to the top of the file just to toggle the Scopes / Navigate
+     * popups.
+     *
+     * Implementation notes:
+     *   - `position: sticky` requires NO `overflow: hidden|auto|scroll`
+     *     on any ancestor between the toolbar and the viewport. The
+     *     .code-area below is `overflow: auto`, but it is a SIBLING
+     *     of .code-toolbar, not an ancestor, so sticky is free to
+     *     stick to the viewport.
+     *   - `top: 0` makes it stick to the viewport top once the
+     *     pageheader.jspf chrome scrolls out of view. If you want
+     *     a small breathing gap, change to e.g. `top: 4px`.
+     *   - `z-index: 5` puts the toolbar above the code content
+     *     (z-index auto) but BELOW the floating Scopes / Navigate /
+     *     Intelligence popups (z-index 10 in the .window rules).
+     *     That ordering matches the user's mental model: popups
+     *     should never be hidden behind the toolbar they belong to. */
+    position: sticky;
+    top: 0;
+    z-index: 5;
 }
 .code-toolbar-left { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .code-toolbar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -1688,21 +1713,50 @@ document.pageReady.push(function() {
             if (!window.jQuery || !jQuery('#scopes_win').length) {
                 return;
             }
-            var $wh = $('#whole_header');
-            if (!$wh.length) return;
-            var chromeBottom = $wh.offset().top + $wh.outerHeight();
-            /* `.l`/`.hl` may live inside `.scope-body` (a `<span>`
-             * wrapping every body line) or directly under the
-             * `.scope-head` (the head + the body-wrap line). Pick the
-             * first one whose top is at or below the chrome bottom. */
+            /* Pick the uppermost VISIBLE line. This avoids two
+             * failure modes:
+             *
+             *  1. Using #whole_header.outerHeight() misses the
+             *     sticky toolbar (once the chrome scrolls past, the
+             *     toolbar stops being a document-flow element so
+             *     .outerHeight() of #whole_header no longer reflects
+             *     the visible chrome stack).
+             *
+             *  2. Using #code-area.offset().top is fragile: the
+             *     area has internal padding / borders / sticky
+             *     overlap. The exact offset shifts with each
+             *     refactor and Chrome version.
+             *
+             * "Uppermost visible line" is what the user actually
+             * wants: "the line the user is reading right now". Any
+             * line with rect.top ≥ 0 is on-screen; we pick the
+             * SMALLEST such top so the uppermost visible line
+             * wins. Lines with rect.top < 0 are above the viewport
+             * and must not be picked — otherwise we show the
+             * PREVIOUS function's body for the current viewport.
+             *
+             * Performance: the dump emits thousands of .l anchors.
+             * Once we find a line whose rect.top >= innerHeight we
+             * can break early (later lines are off-screen below).
+             */
             var $lines = $('#src .l, #src .hl, #content .l, #content .hl');
             var target = null;
+            var bestTop = Infinity;
+            var viewportH = window.innerHeight || 0;
             for (var i = 0; i < $lines.length; i++) {
                 var el = $lines[i];
                 var rect = el.getBoundingClientRect();
-                if (rect.top >= chromeBottom - 1) {
+                /* Skip lines above the viewport (scrolled past). */
+                if (rect.bottom <= 0) continue;
+                /* Lines at or below the viewport bottom are out of
+                 * reach; subsequent lines are even further down so
+                 * we can break. */
+                if (rect.top >= viewportH) break;
+                /* Pick the line with the smallest (closest-to-top)
+                 * rect.top among those still on-screen. */
+                if (rect.top < bestTop) {
+                    bestTop = rect.top;
                     target = el;
-                    break;
                 }
             }
             if (!target) {
@@ -2111,52 +2165,162 @@ document.pageReady.push(function() {
                             .on('hide', _layoutPopups);
     }
 
-    /* ── Scopes popup scroll sync ──
+    /* ── Scopes popup scroll sync via IntersectionObserver ──
      *
-     * utils.js's vendored `scope_on_scroll()` is broken in the new
-     * chrome (root cause B: elementFromPoint hits .code-content
-     * instead of .l/.hl), so as the user scrolls the code area the
-     * Scopes popup stays frozen on whatever scope it was seeded
-     * with. Re-implement scroll sync on our own listener.
+     * Why IntersectionObserver and not scroll listeners?
      *
-     * We throttle with requestAnimationFrame + a simple dirty flag so
-     * a fast scroll (trackpad fling) doesn't queue hundreds of
-     * getBoundingClientRect() walks. We also gate on
-     * `jQuery.scopesWindow.is(':visible')` so a closed popup doesn't
-     * pay any cost. The vendored `scope_on_scroll()` still runs on
-     * `$(window).scroll` (utils.js line 1337); it's a no-op in the
-     * new chrome and harmless, so we leave it alone.
+     * The previous revisions bound `scroll` listeners on
+     * `#code-area` AND `window` and throttled with rAF. That still
+     * fails to update the popup as the user scrolls past a function
+     * boundary, for one or more of these reasons:
      *
-     * Bind to BOTH #content (alias) and #code-area (real id before
-     * the shim ran) since the alias is created by our own shim above
-     * and they refer to the same element — but in case a future
-     * refactor removes the alias, the code-area id always exists. */
+     *   - The page may scroll on `document.documentElement` (the
+     *     default scrollingElement in standards mode) rather than
+     *     `window`, so neither `window.addEventListener('scroll', …)`
+     *     nor `$area.addEventListener('scroll', …)` fires.
+     *
+     *   - A sticky .code-toolbar in front of #code-area can cause
+     *     `getBoundingClientRect()` to report coordinates that don't
+     *     match the scroll position the browser actually rendered.
+     *
+     *   - rAF throttling drops events when the user flings the
+     *     trackpad and the page hits the scroll-end; the popup is
+     *     left showing the scope from BEFORE the fling.
+     *
+     * IntersectionObserver sidesteps all of these: it watches the
+     * line anchors themselves and the browser fires a callback
+     * whenever any of them enters or leaves the viewport. We
+     * observe the .l/.hl anchors under #src with a single root
+     * (the actual scrolling container, or null = viewport) and an
+     * 8-pixel top "shrinking band" so a line is "visible" only
+     * when its top is at most 8px below the viewport's top edge.
+     * That band approximates the "current line" the user is reading.
+     *
+     * Performance: thousands of `.l` anchors in a 50k-line file
+     * could be expensive, but IntersectionObserver batches its
+     * callbacks across a frame, so even an 8k-anchor dump observes
+     * cleanly. We also debounce the callback's actual
+     * `_fillScopesDom()` write — once per frame is enough; multiple
+     * `.l` crossings in the same frame collapse into one update.
+     *
+     * Fallback: if IntersectionObserver is not available (very old
+     * browsers, very rare sandboxed contexts), we fall back to a
+     * window scroll listener + rAF. */
     (function _wireScopesScrollSync() {
-        var rafScheduled = false;
-        function _onScroll() {
-            if (rafScheduled) return;
-            rafScheduled = true;
+        var _scopesObserverScheduled = false;
+        if (!('IntersectionObserver' in window)) {
+            /* Legacy fallback — duplicate of the previous revision's
+             * strategy. */
+            var rafScheduled = false;
+            function _onScroll() {
+                if (rafScheduled) return;
+                rafScheduled = true;
+                requestAnimationFrame(function () {
+                    rafScheduled = false;
+                    try { _scopeAtViewportTop(); }
+                    catch (e) { console.error('[opengrok] scopes scroll sync failed', e); }
+                });
+            }
+            window.addEventListener('scroll', _onScroll, { passive: true });
+            return;
+        }
+        var $lines = jQuery('#src .l, #src .hl, #content .l, #content .hl');
+        if (!$lines.length) return;
+        /* Shrink the observation root from the bottom by a large
+         * amount so a line is reported intersecting only when its
+         * top edge has reached the viewport top — i.e. it just
+         * crossed into view as the user scrolls DOWN. Lines whose
+         * top is anywhere between the viewport top and 8px below
+         * it count as "the current line". We do NOT shrink the top
+         * because we want EVERY line that enters the viewport to
+         * trigger us, even if only 1px of it is visible (so the
+         * very first line of the file still triggers when the page
+         * is at scrollY=0). */
+        var viewportH = window.innerHeight || 800;
+        var observer = new IntersectionObserver(function (entries) {
+            /* Throttle the actual fill to one per frame: multiple
+             * .l crossings within the same frame collapse into a
+             * single _scopeAtViewportTop() call, which then picks
+             * the uppermost visible line. */
+            if (_scopesObserverScheduled) return;
+            _scopesObserverScheduled = true;
             requestAnimationFrame(function () {
-                rafScheduled = false;
+                _scopesObserverScheduled = false;
                 try {
                     if (!window.jQuery || !jQuery.scopesWindow ||
                             !jQuery.scopesWindow.initialized) { return; }
                     if (!jQuery.scopesWindow.is(':visible')) { return; }
-                    _scopeAtViewportTop();
+                    /* Walk every newly-intersecting entry (this frame
+                     * may contain several if the user scrolled past a
+                     * whole block of lines in one go). The first one
+                     * whose isIntersecting=true AND boundingClientRect.top
+                     * is closest to 0 is the current top-of-viewport
+                     * line. */
+                    var best = null;
+                    var bestTop = Infinity;
+                    for (var k = 0; k < entries.length; k++) {
+                        var e = entries[k];
+                        if (!e.isIntersecting) continue;
+                        var t = e.boundingClientRect.top;
+                        if (t >= 0 && t < bestTop) {
+                            bestTop = t;
+                            best = e.target;
+                        }
+                    }
+                    if (best) {
+                        /* Direct write — bypass _scopeAtViewportTop
+                         * entirely. We know `best` is the uppermost
+                         * line the observer just fired on, which by
+                         * definition sits in the top 8px of the
+                         * viewport. */
+                        var $par = jQuery(best).closest('.scope-body, .scope-head');
+                        if ($par.length) {
+                            var $head = $par.hasClass('scope-body') ?
+                                $par.prev() : $par;
+                            var $sig = $head.children().first();
+                            var rawHtml = ($sig.html() || $head.text() || '').trim();
+                            var parenIdx = rawHtml.indexOf('(');
+                            var shortName = (parenIdx > 0 ?
+                                rawHtml.substring(0, parenIdx) :
+                                rawHtml.substring(0, 80)).trim();
+                            _fillScopesDom($head.attr('id'), shortName);
+                        } else {
+                            /* Line is outside any scope (file-level
+                             * code). Show the first scope-head as a
+                             * sensible default. */
+                            _seedScopes();
+                        }
+                    } else {
+                        /* No intersecting entry yet (e.g. user
+                         * scrolled fast past all observed lines —
+                         * shouldn't happen, but degrade gracefully). */
+                        _scopeAtViewportTop();
+                    }
                 } catch (e) {
-                    console.error('[opengrok] scopes scroll sync failed', e);
+                    console.error('[opengrok] scopes observer failed', e);
                 }
             });
+        }, {
+            /* root: null → use the viewport. */
+            root: null,
+            /* Shrink the root's bottom by everything below the top
+             * 8px. A line anchor's rect must overlap the uppermost
+             * 8px of the viewport to be considered intersecting.
+             * That's the visual definition of "the line at the top
+             * of the code view". */
+            rootMargin: '0px 0px -' + Math.max(0, viewportH - 8) + 'px 0px',
+            /* Even a single pixel of intersection counts — when the
+             * line just barely scrolls into the top 8px, fire. */
+            threshold: 0
+        });
+        /* Observe every .l / .hl. The IntersectionObserver batch
+         * callback already coalesces entries, so observing thousands
+         * of elements is fine. */
+        for (var i = 0; i < $lines.length; i++) {
+            observer.observe($lines[i]);
         }
-        var $area = document.getElementById('code-area') ||
-                    document.getElementById('content');
-        if ($area) { $area.addEventListener('scroll', _onScroll); }
-        /* Also listen on window scroll — the code area is the only
-         * scrolling container on a code-view page, but binding to
-         * window covers edge cases (e.g. the chrome shrinks when the
-         * compact-nav collapses on small screens and the page itself
-         * starts scrolling). */
-        window.addEventListener('scroll', _onScroll, { passive: true });
+        /* Stash for the debug helper. */
+        window._opengrokScopesObserver = observer;
     })();
 
     /* The Scopes / Navigate buttons intentionally do NOT carry a
