@@ -640,9 +640,17 @@ body.lines-hidden .code-area pre span.unfold-icon {
 #navigate_win a.xr   { color: #909; font-weight: 700; }
 #navigate_win a.d    { color: #909; font-weight: 700; }
 #navigate_win a.scope{ color: steelblue; font-weight: 700; padding-left: 1ex; }
-/* Generic link styling for the IntelliScence + Scopes windows (and
- * for any Navigate link without a symbol class). The per-class rules
+/* Generic link styling for the IntelliScence window's action links
+ * and any Navigate link without a symbol class. The per-class rules
  * above have higher specificity and override this for symbols.
+ *
+ * We deliberately DO NOT include `#scopes_win a` here: in the
+ * original OpenGrok chrome (and the legacy Apache-tomcat
+ * deployment) the scopes popup's single scope-link was rendered
+ * without an underline. Mirroring that style. The `:not(.minimize)`
+ * guard below keeps the close button (utils.js appends
+ * `<a href="#" class="minimize">x</a>`) from being pulled into the
+ * generic IntelliScence rule.
  *
  * Belt-and-suspenders: redeclare `color: #0000ee` for `:focus` and
  * `:active` so the IntelliScence action links (Highlight /
@@ -654,9 +662,6 @@ body.lines-hidden .code-area pre span.unfold-icon {
 #intelli_win a,
 #intelli_win a:focus,
 #intelli_win a:active,
-#scopes_win a,
-#scopes_win a:focus,
-#scopes_win a:active,
 #navigate_win a:not(.xm):not(.xa):not(.xl):not(.xv):not(.xc):not(.xp):not(.xi):not(.xn):not(.xe):not(.xer):not(.xs):not(.xt):not(.xts):not(.xu):not(.xfld):not(.xmb):not(.xf):not(.xmt):not(.xsr):not(.xlbl):not(.xr):not(.d):not(.scope),
 #navigate_win a:not(.xm):not(.xa):not(.xl):not(.xv):not(.xc):not(.xp):not(.xi):not(.xn):not(.xe):not(.xer):not(.xs):not(.xt):not(.xts):not(.xu):not(.xfld):not(.xmb):not(.xf):not(.xmt):not(.xsr):not(.xlbl):not(.xr):not(.d):not(.scope):focus,
 #navigate_win a:not(.xm):not(.xa):not(.xl):not(.xv):not(.xc):not(.xp):not(.xi):not(.xn):not(.xe):not(.xer):not(.xs):not(.xt):not(.xts):not(.xu):not(.xfld):not(.xmb):not(.xf):not(.xmt):not(.xsr):not(.xlbl):not(.xr):not(.d):not(.scope):active {
@@ -666,15 +671,12 @@ body.lines-hidden .code-area pre span.unfold-icon {
 }
 /* Scopes window: the body contains a single `<a>` built by utils.js's
  * buildLink(id, name) — that link is the only thing the user sees
- * inside the popup. Force it to display as a proper clickable link
- * (blue + underline + block so it stretches the full width of the
- * body and is easy to click): the previous inline-block rule already
- * turns it into a click target, but in some browsers the inline-block
- * container of the scope-signature span collapses to zero height when
- * the only child is a hidden span, so the user can't click the empty
- * area. `min-height: 1.5em` + `padding: 4px 0` guarantees the link is
- * always at least one line tall. */
-#scopes_win a {
+ * inside the popup. Make sure it is a proper clickable target — but
+ * the `.minimize` close button is ALSO an `<a>` inside this window,
+ * so we exclude it via `:not(.minimize)` to keep its dimensions
+ * untouched (the close button is styled by utils.js's window plugin
+ * and should look like the title-bar × that the user expects). */
+#scopes_win a:not(.minimize) {
     min-height: 1.5em;
     padding: 4px 0;
     word-break: break-word;
@@ -710,23 +712,46 @@ body.lines-hidden .code-area pre span.unfold-icon {
     font-family: monospace;
 }
 
-/* Remove the browser's default focus ring on the close button.
+/* ── Window close button (×) ──
  *
- * utils.js appends `<a href="#" class="minimize">x</a>` as the
- * close button on every floating window. After the user clicks it,
- * browsers draw the default :focus outline OUTSIDE the button's
- * 2px-outset border (visible in the screenshot as a small black
- * rectangle around the "x"). The original OpenGrok stylesheet
- * doesn't suppress it explicitly because the legacy chrome used a
- * table-based layout with different focus behaviour; in the
- * refactored chrome the focus ring is jarring and clearly an
- * accessibility regression. `outline: 0` is the OpenGrok-standard
- * way to silence it (same pattern as the `.goto-line-input` rule
- * further up in this stylesheet). */
+ * utils.js's window plugin appends
+ *   <a href="#" class="minimize">x</a>
+ * as the close button on every floating window. By default the
+ * browser's `<a>` styling leaks in (underline, focus ring, default
+ * link colour). Reset that so the × button looks like a plain
+ * clickable label, matching the legacy OpenGrok chrome and the
+ * upstream apache_tomcat deployment.
+ *
+ * - `text-decoration: none` removes the underline that would
+ *   otherwise appear under the "x" (the `:not(.minimize)` guard
+ *   above on `#scopes_win a` doesn't help here because the generic
+ *   IntelliScence rule further up still matches if the close
+ *   button's parent is, say, the intelli window — same selector
+ *   chain as the link list items).
+ * - `color: inherit` keeps the "x" the same colour as the title-bar
+ *   text instead of inheriting the IntelliScence `#0000ee`.
+ * - `outline: none` silences the focus ring that browsers draw on
+ *   `<a>` elements after a click (the legacy table-based chrome
+ *   didn't have this issue; in the refactored chrome the focus
+ *   ring is a small black rectangle around the "x").
+ * - `font-weight: bold` makes the "x" readable against the cream
+ *   title-bar background without being huge. */
 .diff_navigation_style .minimize:focus,
 .diff_navigation_style .minimize:active,
 .diff_navigation_style .minimize {
     outline: none;
+    text-decoration: none;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    padding: 0 6px;
+    font-weight: bold;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+.diff_navigation_style .minimize:hover {
+    color: #cf222e;
 }
 #intelli_win ul,
 #scopes_win ul,
@@ -1245,101 +1270,101 @@ body.lines-hidden .code-area pre span.unfold-icon {
  * and the toolbar acts as a plain toggle, matching the original
  * OpenGrok chrome's behaviour.
  */
+/* ── Legacy anchor shims (#content / #whole_header) — MUST run
+ * before utils.js's $(document).ready() callback fires.
+ *
+ * utils-0.0.48.js hardcodes two element ids that only existed in
+ * the OLD OpenGrok chrome and are NOT rendered by the refactored
+ * chrome (pageheader.jspf emits <header class="common-page-header">
+ * and list.jsp emits <main class="code-area">):
+ *
+ *   • `#content`      — used by scopesWindow.load()   (line 1159)
+ *                       as `$("#content").offset().top`.
+ *                       On a page with no #content, jQuery returns
+ *                       an EMPTY set, `.offset()` yields undefined,
+ *                       and `undefined.top` throws a TypeError. That
+ *                       exception escapes from inside the plugin's
+ *                       `load` callback and the popup never reaches
+ *                       the show/hide hooks we want to bypass.
+ *
+ *   • `#whole_header` — used by scope_on_scroll() (line 2221) to
+ *                       compute the y coordinate to hit-test with
+ *                       document.elementFromPoint(15, y + 1).
+ *
+ * Both shims run here, in the global scope, synchronously, at the
+ * top of the only <script> block — BEFORE any $(document).ready()
+ * callback (utils.js's ready callback calls init_scopes() which
+ * immediately creates #scopes_win and fires the load callback,
+ * and that load callback depends on #content existing).
+ *
+ * If we instead put this shim inside a document.pageReady.push()
+ * callback (the previous location), we'd be too late: utils.js
+ * has already fired init_scopes() inside its own ready handler,
+ * which runs before window.onload (where pageReady callbacks
+ * fire — utils.js line 1525-1529).
+ *
+ * Both are only added when absent, so an upstream page that still
+ * has them is left untouched. */
+(function _installLegacyAnchorsImmediate() {
+    if (!document.getElementById('whole_header')) {
+        /* The original Apache-tomcat deployment put EVERYTHING
+         * (logo + compact-nav + breadcrumb) under one element
+         * with id="whole_header", and utils.js's scope_on_scroll()
+         * reads `$('#whole_header').outerHeight() + 2` to compute
+         * the y-coordinate for `elementFromPoint(15, y + 1)`. The
+         * outerHeight() therefore needed to include the full
+         * stacked header — logo + nav + breadcrumb — so that the
+         * hit-test landed INSIDE the dumped-xref area below.
+         *
+         * The refactored chrome splits those three blocks into
+         * separate siblings (<header.common-page-header>,
+         * mast.jsp's <div class="compact-nav">, breadcrumb.jspf's
+         * <nav class="dir-path">). Tagging only the logo header
+         * leaves the hit-test pointing at the compact-nav (which
+         * has no `.l` line anchors), so scope_on_scroll() exits
+         * early and the Scopes window is never populated.
+         *
+         * Fix: walk down through every chrome sibling until we
+         * find a sibling that actually contains a `#code-area` /
+         * `#src` descendant, and tag the one JUST BEFORE it. That
+         * way `outerHeight()` spans the full chrome stack and
+         * `y + 1` lands inside the dumped xref. Falls back to the
+         * logo header on pages with no code area (e.g. directory
+         * listings). */
+        var code = document.getElementById('code-area') ||
+                   document.getElementById('content') ||
+                   document.getElementById('src');
+        var tag = document.querySelector('header.common-page-header');
+        if (code && tag) {
+            var n = tag.nextElementSibling;
+            while (n && !n.contains(code) && n !== code) {
+                tag = n;
+                n = n.nextElementSibling;
+            }
+        }
+        if (tag) {
+            tag.id = 'whole_header';
+        }
+    }
+    if (!document.getElementById('content')) {
+        var area = document.getElementById('code-area');
+        if (area) {
+            area.id = 'content';
+            /* keep the old id working for our own selectors below */
+            area.classList.add('code-area');
+            area.setAttribute('data-alias-of', 'code-area');
+        }
+    }
+})();
+
 document.pageReady.push(function() {
-    /* ── Legacy anchor shims (#content / #whole_header) ──
-     *
-     * ROOT CAUSE of the "Scopes / Navigate popups open but are empty".
-     *
-     * utils-0.0.48.js hardcodes two element ids that only existed in
-     * the OLD OpenGrok chrome and are NOT rendered by the refactored
-     * chrome (pageheader.jspf emits <header class="common-page-header">
-     * and list.jsp emits <main class="code-area">):
-     *
-     *   • `#content`      — used by scopesWindow.load()   (line 1159)
-     *                       and navigateWindow.getTopOffset() (line 1292)
-     *                       as `$("#content").offset().top`.
-     *                       On a page with no #content, jQuery returns
-     *                       an EMPTY set, `.offset()` yields undefined,
-     *                       and `undefined.top` throws a TypeError.
-     *                       That exception escapes from inside the
-     *                       plugin's `load` callback, so the rest of
-     *                       load() — and, for navigateWindow, the
-     *                       `update()` call that fills the body — never
-     *                       runs. Result: the frame renders (title bar
-     *                       + cream background, exactly as in the
-     *                       screenshot) but the body stays empty.
-     *
-     *   • `#whole_header` — used by scope_on_scroll() (line 2221) to
-     *                       compute the y coordinate to hit-test with
-     *                       document.elementFromPoint(15, y + 1). With
-     *                       no #whole_header, outerHeight() returns
-     *                       undefined → y is NaN → elementFromPoint
-     *                       returns null → the `.l/.hl` test never
-     *                       matches → scopesWindow.update() is never
-     *                       called → the Scopes body stays empty.
-     *
-     * Rather than patch the vendored utils js (which would be
-     * overwritten on upgrade), we render two zero-impact alias
-     * elements that map the legacy ids onto the new chrome:
-     *   #whole_header → the LAST sibling before the code area
-     *                   (logo header + compact-nav + breadcrumb; see
-     *                   the function body for why we tag the LAST
-     *                   one rather than just the logo header)
-     *   #content      → the scrolling code area
-     * Both are only added when absent, so an upstream page that still
-     * has them is left untouched. */
-    (function _installLegacyAnchors() {
-        if (!document.getElementById('whole_header')) {
-            /* The original Apache-tomcat deployment put EVERYTHING
-             * (logo + compact-nav + breadcrumb) under one element
-             * with id="whole_header", and utils.js's scope_on_scroll()
-             * reads `$('#whole_header').outerHeight() + 2` to compute
-             * the y-coordinate for `elementFromPoint(15, y + 1)`. The
-             * outerHeight() therefore needed to include the full
-             * stacked header — logo + nav + breadcrumb — so that the
-             * hit-test landed INSIDE the dumped-xref area below.
-             *
-             * The refactored chrome splits those three blocks into
-             * separate siblings (<header.common-page-header>,
-             * mast.jsp's <div class="compact-nav">, breadcrumb.jspf's
-             * <nav class="dir-path">). Tagging only the logo header
-             * leaves the hit-test pointing at the compact-nav (which
-             * has no `.l` line anchors), so scope_on_scroll() exits
-             * early and the Scopes window is never populated — the
-             * exact "Scopes is empty" symptom in the bug report.
-             *
-             * Fix: walk down through every chrome sibling until we
-             * find a sibling that actually contains a `#code-area` /
-             * `#src` descendant, and tag the one JUST BEFORE it. That
-             * way `outerHeight()` spans the full chrome stack and
-             * `y + 1` lands inside the dumped xref. Falls back to the
-             * logo header on pages with no code area (e.g. directory
-             * listings). */
-            var code = document.getElementById('code-area') ||
-                       document.getElementById('content') ||
-                       document.getElementById('src');
-            var tag = document.querySelector('header.common-page-header');
-            if (code && tag) {
-                var n = tag.nextElementSibling;
-                while (n && !n.contains(code) && n !== code) {
-                    tag = n;
-                    n = n.nextElementSibling;
-                }
-            }
-            if (tag) {
-                tag.id = 'whole_header';
-            }
-        }
-        if (!document.getElementById('content')) {
-            var area = document.getElementById('code-area');
-            if (area) {
-                area.id = 'content';
-                /* keep the old id working for our own selectors below */
-                area.classList.add('code-area');
-                area.setAttribute('data-alias-of', 'code-area');
-            }
-        }
-    })();
+    /* ── Legacy anchor shims (#content / #whole_header) — moved to
+     * the synchronous IIFE _installLegacyAnchorsImmediate() at the
+     * very top of this <script> block. utils.js's $(document).ready()
+     * callback (which calls init_scopes() and immediately fires
+     * scopesWindow.load()) runs BEFORE window.onload (which is
+     * where the pageReady callbacks fire), so any shim registered
+     * here would be too late for `$("#content").offset().top`. */
 
     /* Delegate the heavy lifting to the upstream pageReadyList(). It
      * already does everything the original Apache-tomcat deployment
@@ -1457,28 +1482,151 @@ document.pageReady.push(function() {
         console.error('[opengrok] navigate window population failed', err);
     }
 
-    /* Seed the Scopes window once so it is never blank on first open.
-     * utils.js only fills it from scope_on_scroll(); if the user opens
-     * the window before scrolling, or the file has no scope-head
-     * elements at all, the body would stay empty.
+    /* ── Silence utils.js's vendored scope_on_scroll() ──
      *
-     * utils.js's buildLink() generates
-     *   <a href="#${id}" title="${name}">${name}</a>
-     * and it shows the WHOLE enclosing scope at the top of the view,
-     * not just the innermost scope-head. For a typical C file that's
-     * "<global scope> → file-level → function" — three nested anchors
-     * stacked. Our xref dump only emits one .scope-head per function,
-     * so the seed picks the first one (the outermost) which is the
-     * correct behaviour to match the original deployment. */
+     * utils-0.0.48.js ships `scope_on_scroll()` at module scope. Its
+     * `show` / `hide` hooks on $.scopesWindow call it directly. In
+     * the new chrome it crashes inside `elementFromPoint(outerHeight+2)`
+     * because the 16px top padding on `.code-content` shifts the first
+     * `.l/.hl` anchor out of the y-coordinate; `elementFromPoint` then
+     * returns null and `$(c).is('.l, .hl')` throws
+     *     TypeError: Cannot read properties of undefined (reading 'top')
+     * On Chrome 113+ the browser also flags `unload` handlers as a
+     * permissions policy violation — that's a separate, unrelated
+     * warning.
+     *
+     * By the time our pageReady callback runs, utils.js has bound
+     * `window.scope_on_scroll` and `init_scopes()` has already wired
+     * it into the scopesWindow show/hide hooks. We replace it with a
+     * stub that defers to our own layout-agnostic
+     * `_scopeAtViewportTop()` helper, which already uses
+     * `getBoundingClientRect()` and never throws.
+     *
+     * Why not just delete scope_on_scroll entirely? Because utils.js's
+     * `$(window).scroll(scope_on_scroll)` (line 1337) would then call
+     * `undefined()` on every scroll and throw. Defining a no-op
+     * keeps the scroll listener harmless. */
+    window.scope_on_scroll = function _opengrokScopeOnScroll() {
+        try {
+            if (typeof _scopeAtViewportTop === 'function') {
+                _scopeAtViewportTop();
+            }
+        } catch (err) {
+            console.error('[opengrok] scope_on_scroll replacement failed', err);
+        }
+    };
+
+    /* ── Locate the Scopes popup body and write scope links directly ──
+     *
+     * Earlier revisions patched `jQuery.scopesWindow.update()` to
+     * suppress its auto-show side effect (utils-0.0.48.js line
+     * 1182-1189 sets `data-shown-once` and calls `show()`), but the
+     * patch was fighting the vendored plugin on its own turf and
+     * turned out to be fragile: depending on the timing of
+     * `init_scopes()` (which re-creates the wrapper) the patch
+     * either ran before the real update() was attached, or got
+     * overwritten by a later re-init.
+     *
+     * Simpler, more robust approach: BYPASS `update()` entirely and
+     * write to the popup's body div directly. utils.js's window
+     * plugin builds #scopes_win as:
+     *   .window .scopes-window .diff_navigation_style
+     *     .window-header  (title strip with × close button)
+     *     .window-body
+     *       <div> ($errors container, transient error messages)
+     *       <div> ($scopes container — THIS is what we want)
+     * We locate the $scopes container with `_scopesBody()` and write
+     * <a href="#id">name</a> into it ourselves. The vendored
+     * `update()` is left alone, but our path never calls it, so
+     * its side-effects cannot leak into our state. If the user
+     * closes the popup via its × button, utils.js just hides the
+     * wrapper — the body content survives, so the next show is
+     * non-empty automatically.
+    /* Locate the body div inside #scopes_win that utils.js stores
+     * scope links in. utils.js's window plugin builds the structure
+     * as:
+     *   #scopes_win (.window .scopes-window .diff_navigation_style)
+     *     .window-header
+     *       …
+     *     .window-body
+     *       <div> (utils.js's $errors container, set by window plugin)
+     *       <div> (utils.js's $scopes container — THIS is what we want)
+     *
+     * The $scopes container is the only direct child of .window-body
+     * that is NOT a script/error element. We pick it dynamically
+     * instead of relying on `jQuery.scopesWindow.$scopes` because
+     * that property may not be exposed on the wrapper, or may be a
+     * stale reference after the plugin is re-initialised by
+     * `init_scopes()` later in the lifecycle.
+     *
+     * Returns a jQuery wrapper for the body div, or an empty wrapper
+     * (length=0) if #scopes_win isn't there yet. The caller decides
+     * what to do with the empty result. */
+    function _scopesBody() {
+        var $win = $('#scopes_win');
+        if (!$win.length) return $();
+        var $body = $win.children('.window-body').first();
+        if (!$body.length) return $();
+        /* Walk all direct children of $body and return the FIRST one
+         * that does not look like the errors container. utils.js's
+         * window plugin inserts the errors div first (see line 595
+         * `append(self.$errors = $('<div>').css('text-align', 'center'))`)
+         * and then appends the user's $scopes via `body().append(...)`
+         * (line 1154-1156). So the LAST direct child of $body is the
+         * $scopes container in normal operation; the FIRST non-errors
+         * one is safer if the plugin ever reorders. */
+        var kids = $body.children();
+        for (var i = 0; i < kids.length; i++) {
+            var k = kids[i];
+            /* The errors container has inline text-align:center and
+             * is reserved for transient error messages; skip it. */
+            if (k.style && k.style.textAlign === 'center') continue;
+            return $(k);
+        }
+        /* Fallback: no non-errors child yet. Use the last child, or
+         * if $body is empty create one. */
+        if (kids.length) return $(kids[kids.length - 1]);
+        return $('<div>').appendTo($body);
+    }
+
+    /* Direct DOM writer. Does NOT call jQuery.scopesWindow.update()
+     * (whose vendored implementation triggers a no-op scope_on_scroll
+     * that drops the body in the new chrome and clears our write in
+     * some versions). Writes to the DOM directly so the popup body
+     * is whatever we put there. */
+    function _fillScopesDom(id, link) {
+        try {
+            var $body = _scopesBody();
+            if (!$body.length) return false;
+            $body.empty();
+            if (id && link) {
+                var $a = $('<a>')
+                    .attr('href', '#' + id)
+                    .attr('title', link)
+                    .text(link);
+                $body.append($a);
+            } else if (link) {
+                /* "No scope at top of view" placeholder. */
+                $body.append($('<span>').text(link));
+            }
+            return true;
+        } catch (err) {
+            console.error('[opengrok] _fillScopesDom failed', err);
+            return false;
+        }
+    }
+
     function _seedScopes() {
         try {
-            if (!window.jQuery || !jQuery.scopesWindow || !jQuery.scopesWindow.initialized) {
+            if (!window.jQuery || !jQuery('#scopes_win').length) {
                 return;
             }
-            if (jQuery.scopesWindow.$scopes &&
-                    jQuery.scopesWindow.$scopes.children().length) {
-                return;     // already populated by scope_on_scroll()
-            }
+            /* Skip if already populated (avoid clobbering a working
+             * fill from a previous scroll / show). */
+            var $body = _scopesBody();
+            if (!$body.length) return;
+            if ($body.children().length) return;
+
             /* Look for .scope-head under #src (the refactored chrome
              * emits it), then fall back to #content (alias), then to
              * #code-area (the real id before the shim ran). Picking
@@ -1486,34 +1634,29 @@ document.pageReady.push(function() {
              * which shows the outermost enclosing scope. */
             var $head = $('#src .scope-head, #content .scope-head, #code-area .scope-head').first();
             if ($head.length) {
-                /* buildLink() expects a child element whose .html() is
-                 * the link label. The xref dump emits the
-                 * scope-signature <span> as the first child of each
-                 * .scope-head; reading its html() is what the
-                 * original utils.js code did inside scope_on_scroll()
-                 * (see utils-0.0.47.js line 2232).
+                /* The xref dump emits the scope-signature <span> as
+                 * the first child of each .scope-head; reading its
+                 * html() is what the original utils.js code did
+                 * inside scope_on_scroll() (see utils-0.0.47.js line
+                 * 2232).
                  *
                  * The scope-signature content is the FULL signature
-                 * (name + parameters), e.g. "sample_hbp_handler(struct
-                 * perf_event * bp, …)" — which on a wide line is wider
-                 * than the scopes-window's max-width and forces a
-                 * wrap that makes the popup look broken. Strip it down
-                 * to just the leading identifier (the function name)
-                 * by taking the text up to the first opening paren,
-                 * matching what the original OpenGrok toolbar showed
-                 * in the legacy chrome. If the signature has no
-                 * parentheses, fall back to the first 80 chars. */
+                 * (name + parameters), e.g.
+                 *   "sample_hbp_handler(struct perf_event * bp, …)"
+                 * which is wider than the scopes-window's max-width
+                 * and forces a wrap that makes the popup look
+                 * broken. Strip it down to just the leading
+                 * identifier (the function name) by taking the text
+                 * up to the first opening paren, matching what the
+                 * original OpenGrok toolbar showed in the legacy
+                 * chrome. If the signature has no parentheses, fall
+                 * back to the first 80 chars. */
                 var rawHtml = ($head.children().first().html() || $head.text() || '').trim();
                 var parenIdx = rawHtml.indexOf('(');
                 var shortName = (parenIdx > 0 ? rawHtml.substring(0, parenIdx) : rawHtml.substring(0, 80)).trim();
-                jQuery.scopesWindow.update({
-                    id: $head.attr('id'),
-                    link: shortName
-                });
+                _fillScopesDom($head.attr('id'), shortName);
             } else {
-                jQuery.scopesWindow.$scopes
-                    .empty()
-                    .append($('<span>').text('No scope at the top of the view'));
+                _fillScopesDom(null, 'No scope at the top of the view');
             }
         } catch (err) {
             console.error('[opengrok] scopes seed failed', err);
@@ -1542,7 +1685,7 @@ document.pageReady.push(function() {
      * correct scope. */
     function _scopeAtViewportTop() {
         try {
-            if (!window.jQuery || !jQuery.scopesWindow || !jQuery.scopesWindow.initialized) {
+            if (!window.jQuery || !jQuery('#scopes_win').length) {
                 return;
             }
             var $wh = $('#whole_header');
@@ -1584,10 +1727,7 @@ document.pageReady.push(function() {
             var rawHtml = ($sig.html() || $head.text() || '').trim();
             var parenIdx = rawHtml.indexOf('(');
             var shortName = (parenIdx > 0 ? rawHtml.substring(0, parenIdx) : rawHtml.substring(0, 80)).trim();
-            jQuery.scopesWindow.update({
-                id: $head.attr('id'),
-                link: shortName
-            });
+            _fillScopesDom($head.attr('id'), shortName);
         } catch (err) {
             console.error('[opengrok] scope-at-viewport-top failed', err);
             _seedScopes();
@@ -1603,6 +1743,73 @@ document.pageReady.push(function() {
      * inside _seedScopes() short-circuits any later update from
      * scope_on_scroll(). */
     _seedScopes();
+
+    /* ── Debug helper exposed on window ──
+     *
+     * `window._opengrokDebugScopes()` returns a snapshot of the
+     * current Scopes state so the user can paste it into a bug
+     * report. Cheap to leave in production — the function is only
+     * called manually from devtools. Also re-runs _scopeAtViewportTop
+     * synchronously to give an immediate "what should the popup be
+     * showing right now?" answer.
+     *
+     * Output keys:
+     *   patchInstalled    – did our update() patch survive utils.js's
+     *                      own init?
+     *   popupVisible      – is $.scopesWindow.is(':visible') true?
+     *   popupDisplay      – raw inline style.display
+     *   $scopesChildren   – count of children currently inside $scopes
+     *   $scopesHtml       – first 200 chars of the popup body
+     *   chromeBottom      – y-coordinate where chrome ends
+     *   wholeHeaderFound  – did our `#whole_header` shim find a target?
+     *   scopeHeadCount    – total .scope-head elements in the document
+     *   firstLineRect     – bounding rect of the first .l/.hl
+     *   updateBeforeAfter – child count delta after one re-population */
+    window._opengrokDebugScopes = function () {
+        var info = {};
+        try {
+            var $win = jQuery('#scopes_win');
+            info.scopesWinFound = $win.length;
+            info.popupVisible = $win.is(':visible');
+            info.popupDisplay = $win[0] && $win[0].style.display;
+            var $body = _scopesBody();
+            info.bodyFound = $body.length;
+            if ($body.length) {
+                info.bodyChildren = $body.children().length;
+                var html = $body.html() || '';
+                info.bodyHtml = html.length > 200 ?
+                    html.substring(0, 200) + '…' : html;
+            }
+            info.wholeHeaderFound = $('#whole_header').length > 0;
+            info.scopeHeadCount = $('#src .scope-head, #content .scope-head').length;
+            var $firstLine = $('#src .l, #content .l').first();
+            if ($firstLine.length) {
+                var r = $firstLine[0].getBoundingClientRect();
+                info.firstLineRect = { top: r.top, height: r.height };
+            }
+            var $wh = $('#whole_header');
+            if ($wh.length) {
+                info.chromeBottom =
+                    $wh.offset().top + $wh.outerHeight();
+            }
+            if ($win.length) {
+                var before = $body.length ? $body.children().length : 0;
+                _scopeAtViewportTop();
+                var $b2 = _scopesBody();
+                var after = $b2.length ? $b2.children().length : 0;
+                info.fillBeforeAfter = { before: before, after: after };
+                if ($b2.length) {
+                    var h2 = $b2.html() || '';
+                    info.bodyHtmlAfter = h2.length > 200 ?
+                        h2.substring(0, 200) + '…' : h2;
+                }
+            }
+        } catch (err) {
+            info.error = String(err);
+        }
+        try { console.info('[opengrok-debug] scopes', info); } catch (e) {}
+        return info;
+    };
 
     /* After pageReadyList() runs, both $.navigateWindow and
      * $.scopesWindow exist (scopesWindow was created earlier by the
@@ -1697,6 +1904,30 @@ document.pageReady.push(function() {
      * works regardless of any internal `initialized` flag. We therefore
      * call it as long as the object exists.
      *
+     * The vendored utils.js's `load` callback overrides the popup's
+     * `show` method to also call `scope_on_scroll()` (utils-0.0.48.js
+     * line 1166-1174). `scope_on_scroll()` uses
+     * `document.elementFromPoint(15, y + 1)` where `y` is computed
+     * from `#whole_header.outerHeight() + 2`. In the refactored chrome
+     * the first 16px under the chrome is the `.code-content` padding
+     * (line 329: `padding: 16px 0;`), so `elementFromPoint` returns
+     * the `.code-content` wrapper, NOT a `.l/.hl` line anchor, and
+     * `$(c).is('.l, .hl')` evaluates to false — the vendored update
+     * is a no-op. We therefore MUST refresh the body ourselves on
+     * every show, with our own layout-agnostic implementation.
+     *
+     * Visibility tracking: rather than `jQuery.scopesWindow.is(':visible')`
+     * (which can give wrong answers in some edge cases — see the
+     * ROOT-CAUSE block above) we read the popup's own inline `display`
+     * style. The vendored `init` callback always sets the popup to
+     * `display: none` at startup, and every `show()` call clears the
+     * `display: none` (jQuery's `show` stores and removes the prior
+     * `display` value). So a popup that is currently visible has
+     * `style.display` !== 'none'. This is unambiguous and matches
+     * what the user sees on screen, so the refresh logic below
+     * fires on every "popup just opened" click and stays quiet on
+     * "popup just closed" clicks.
+     *
      * NOTE: the button itself intentionally does NOT keep an `.active`
      * class in sync with the popup's visibility. utils.js installs
      * its own popup-control and the close (x) link on the floating
@@ -1710,22 +1941,62 @@ document.pageReady.push(function() {
         e.preventDefault();
         try {
             if (window.jQuery && jQuery.scopesWindow) {
+                /* Snapshot the popup's `display` style BEFORE the
+                 * toggle so we can tell which direction the click
+                 * moved. The vendored `show` override clears
+                 * `display: none` synchronously (it does NOT animate),
+                 * so reading the new state right after `toggle()` is
+                 * also fine, but a before/after diff is more obvious
+                 * in the source and matches the original behaviour of
+                 * the legacy `if (is(':visible'))` guard.
+                 *
+                 * We deliberately use the raw `style.display` here
+                 * instead of jQuery's `is(':visible')` because the
+                 * latter can give a wrong answer in two important
+                 * edge cases: (1) when the popup is animated to/from
+                 * `display: none` — the animation is over in real life
+                 * but jQuery's heuristic still sees the inline
+                 * `display: none`; (2) when our CSS specifies the
+                 * popup as `position: fixed` with no explicit width
+                 * and a child of `<body>`, jQuery's parent-chain check
+                 * can flag a freshly shown popup as "not visible" if
+                 * an ancestor of the popup happens to have a
+                 * `display: none` style applied via a CSS variable
+                 * that is missing on first paint. Reading the raw
+                 * `style.display` is unambiguous and matches what the
+                 * user actually sees on screen. */
+                const wasHidden = jQuery.scopesWindow[0].style.display === 'none';
                 jQuery.scopesWindow.toggle();
-                if (jQuery.scopesWindow.is(':visible')) {
+                const isShown = jQuery.scopesWindow[0].style.display !== 'none';
+                if (isShown) {
                     /* Show the scope that contains the line currently
                      * at the top of the code viewport — i.e. whichever
                      * function the user is looking at. We use our own
-                     * `_scopeAtViewportTop()` rather than the vendored
-                     * `scope_on_scroll()` because the new chrome adds
-                     * 16px of top padding on `.code-content`, which
-                     * makes the vendored function's
+                     * `_scopeAtViewportTop()` rather than relying on
+                     * the vendored `scope_on_scroll()` (which is also
+                     * auto-called by the overridden `show` method)
+                     * because the new chrome's 16px top padding on
+                     * `.code-content` makes the vendored function's
                      * `elementFromPoint(outerHeight() + 2)` miss every
-                     * line anchor and leave the popup on whatever
-                     * _seedScopes() last wrote. Walking the
-                     * `.l`/`.hl` rects is layout-agnostic and runs
-                     * synchronously, so the popup updates in the same
-                     * frame as the click. */
+                     * line anchor. Walking the `.l`/`.hl` rects is
+                     * layout-agnostic and runs synchronously, so the
+                     * popup updates in the same frame as the click
+                     * and overwrites whatever the (failed) vendored
+                     * update left behind. */
                     _scopeAtViewportTop();
+                    /* Belt-and-suspenders: re-run on the next frame so
+                     * the very first paint after a freshly-shown popup
+                     * is computed against the actual post-show layout.
+                     * Without this, a popup whose `.l`/`.hl` line
+                     * anchors were below the viewport at click time
+                     * (e.g. page just loaded, no scroll yet) ends up
+                     * with the "No scope at the top of the view"
+                     * placeholder even though on the very next tick
+                     * the chrome has settled and a line is visible. */
+                    requestAnimationFrame(function () {
+                        try { _scopeAtViewportTop(); }
+                        catch (e) { console.error('[opengrok] btn-scopes rAF refresh failed', e); }
+                    });
                 }
                 _layoutPopups();
             } else {
@@ -1839,6 +2110,54 @@ document.pageReady.push(function() {
         jQuery.navigateWindow.on('show', _layoutPopups)
                             .on('hide', _layoutPopups);
     }
+
+    /* ── Scopes popup scroll sync ──
+     *
+     * utils.js's vendored `scope_on_scroll()` is broken in the new
+     * chrome (root cause B: elementFromPoint hits .code-content
+     * instead of .l/.hl), so as the user scrolls the code area the
+     * Scopes popup stays frozen on whatever scope it was seeded
+     * with. Re-implement scroll sync on our own listener.
+     *
+     * We throttle with requestAnimationFrame + a simple dirty flag so
+     * a fast scroll (trackpad fling) doesn't queue hundreds of
+     * getBoundingClientRect() walks. We also gate on
+     * `jQuery.scopesWindow.is(':visible')` so a closed popup doesn't
+     * pay any cost. The vendored `scope_on_scroll()` still runs on
+     * `$(window).scroll` (utils.js line 1337); it's a no-op in the
+     * new chrome and harmless, so we leave it alone.
+     *
+     * Bind to BOTH #content (alias) and #code-area (real id before
+     * the shim ran) since the alias is created by our own shim above
+     * and they refer to the same element — but in case a future
+     * refactor removes the alias, the code-area id always exists. */
+    (function _wireScopesScrollSync() {
+        var rafScheduled = false;
+        function _onScroll() {
+            if (rafScheduled) return;
+            rafScheduled = true;
+            requestAnimationFrame(function () {
+                rafScheduled = false;
+                try {
+                    if (!window.jQuery || !jQuery.scopesWindow ||
+                            !jQuery.scopesWindow.initialized) { return; }
+                    if (!jQuery.scopesWindow.is(':visible')) { return; }
+                    _scopeAtViewportTop();
+                } catch (e) {
+                    console.error('[opengrok] scopes scroll sync failed', e);
+                }
+            });
+        }
+        var $area = document.getElementById('code-area') ||
+                    document.getElementById('content');
+        if ($area) { $area.addEventListener('scroll', _onScroll); }
+        /* Also listen on window scroll — the code area is the only
+         * scrolling container on a code-view page, but binding to
+         * window covers edge cases (e.g. the chrome shrinks when the
+         * compact-nav collapses on small screens and the page itself
+         * starts scrolling). */
+        window.addEventListener('scroll', _onScroll, { passive: true });
+    })();
 
     /* The Scopes / Navigate buttons intentionally do NOT carry a
      * mirrored `.active` class. The popup's own close (x) link can
