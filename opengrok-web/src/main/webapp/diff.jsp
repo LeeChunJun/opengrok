@@ -347,11 +347,19 @@ private String getAnnotateRevision(DiffData data) {
     border-top: 1px dashed var(--border-light);
     margin-top: 4px;
     padding-top: 4px;
+    border-left: 3px solid transparent;
+    transition: border-color 0.3s, background-color 0.3s;
 }
 .diff-page .diff-code .chunk:first-child {
     border-top: none;
     margin-top: 0;
     padding-top: 0;
+}
+/* The chunk the jumper last navigated to — a soft outline + tinted
+ * background so the user can spot it after the auto-scroll. */
+.diff-page .diff-code .chunk.is-jumper-active {
+    border-left-color: var(--accent, #0969da);
+    background-color: rgba(9, 105, 218, 0.06);
 }
 
 /* SDIFF (side-by-side) — two panels laid out by the outer
@@ -1142,7 +1150,28 @@ html.diff_jsp #content { margin-top: 0 !important; padding: 0 !important; }
 
         /* Scope hunks to the left/old panel only so SDIFF's visual
          * duplicate hunks in the right panel don't double-count. */
-        var $chunks = $('.diff-panel:first-child .chunk');
+        var $leftChunks = $('.diff-panel:first-child .chunk');
+        var $rightChunks = $('.diff-panel:last-child .chunk');
+        var $chunks = $leftChunks;
+
+        /* The diff content sits inside scrollable .diff-code containers
+         * (left + right for SDIFF; single for UDIFF / TEXT / OLD / NEW).
+         * Collect every .diff-code container so we can scroll each one
+         * to keep both sides in sync. */
+        var $codeContainers = $('.diff-code');
+
+        /* Smooth-scroll a container so the chunk at index `i` is in view.
+         * Uses native Element.scrollTo() — jQuery's .animate({ scrollTop })
+         * is broken in jQuery 3+ and silently no-ops. `easeInOutQuad`
+         * approximates the previous 300ms jQuery easing. */
+        function smoothScrollTo(container, top) {
+            try {
+                container.scrollTo({ top: top, behavior: 'smooth' });
+            } catch (e) {
+                /* Fallback for older browsers without smooth-scroll. */
+                container.scrollTop = top;
+            }
+        }
 
         /* Build the popup DOM. */
         var $popup = $('<div id="diff_win" class="diff-window diff_navigation_style">' +
@@ -1179,12 +1208,59 @@ html.diff_jsp #content { margin-top: 0 !important; padding: 0 !important; }
                 flash('No ' + (i < 0 ? 'previous' : 'next') + ' chunk!');
                 return;
             }
+            /* Drop any previous active-chunk highlight. */
+            $('.chunk.is-jumper-active').removeClass('is-jumper-active');
             index = i;
             update();
-            var $c = $chunks.eq(i);
-            $('html, body').stop().animate({
-                scrollTop: $c.offset().top - 80
-            }, 300);
+            /* In SDiff the same hunk is rendered twice (left = file1
+             * context + deleted, right = file2 context + added) — both
+             * copies live at the same .chunk index in each panel. Mark
+             * them with the active highlight so the user can see where
+             * the jumper took them. */
+            var k = i;
+            if (k < $leftChunks.length) {
+                $leftChunks.eq(k).addClass('is-jumper-active');
+                if (k < $rightChunks.length) {
+                    $rightChunks.eq(k).addClass('is-jumper-active');
+                }
+            }
+
+            /* Scroll every .diff-code container to the chunk's position.
+             * Each container has its OWN .chunk children (left panel
+             * has file1 hunks, right panel has file2 hunks), so we
+             * look up the chunk inside each container individually
+             * rather than reusing the left-panel chunk for both.
+             *
+             * Use the native Element.scrollTo({behavior:'smooth'}) API
+             * rather than jQuery's .animate({scrollTop}) — the latter
+             * is broken in jQuery 3+ and silently no-ops. */
+            $codeContainers.each(function () {
+                var container = this;
+                var $panelChunks = $(container).find('.chunk');
+                var chunk = $panelChunks.get(k);
+                if (!chunk) return;
+                /* The chunk's viewport Y relative to the container's
+                 * viewport Y. `getBoundingClientRect()` returns
+                 * viewport-relative coords regardless of scroll, so this
+                 * gives us "how far is the chunk below the container's
+                 * current top edge, in pixels". */
+                var rel = chunk.getBoundingClientRect().top
+                        - container.getBoundingClientRect().top;
+                /* Target scrollTop = current scrollTop + (rel - 40).
+                 * When the chunk is at viewport position `containerTop + rel`
+                 * and we want it at `containerTop + 40`, we need to scroll
+                 * the container by `(40 - rel)`. But scrollTop only changes
+                 * by increments; `scrollTop + rel - 40` works because:
+                 *   - if chunk is below the visible area (rel > visibleHeight)
+                 *     → goal > current scrollTop, scrolls down ✓
+                 *   - if chunk is at the very top (rel < 0)
+                 *     → goal < current scrollTop, scrolls up ✓
+                 *   - if chunk is already near the top (rel ≈ 40)
+                 *     → goal ≈ current scrollTop, no change ✓ */
+                var goal = container.scrollTop + rel - 40;
+                if (goal < 0) goal = 0;
+                smoothScrollTo(container, goal);
+            });
             flash('Going to chunk ' + (index + 1) + '/' + $chunks.length);
         }
 
