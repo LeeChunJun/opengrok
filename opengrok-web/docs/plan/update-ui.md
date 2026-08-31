@@ -31,7 +31,7 @@
 |--------------------------------------|--------|-----------|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `src/main/webapp/pageheader.jspf`    | 修改     | +213/-215 | 顶部 Logo + 标题条     | `<div class="common-page-header-logo">` → `<a href="/">`；新增 `:hover` 样式                                                                                                                               |
 | `src/main/webapp/foot.jspf`          | 修改     | +131      | 底部 footer + 脚本注入  | 新增中文 footer；保持 `PageConfig.getScripts()` 注入                                                                                                                                                           |
-| `src/main/webapp/httpheader.jspf`    | 修改     | +131      | `<head>` + CSS 变量 | **定义全局 CSS 变量** `--bg`、`--surface`、`--fg`、`--muted`、`--border`、`--accent`、`--accent-dim`、`--font-sans`、`--font-mono`                                                                                  |
+| `src/main/webapp/httpheader.jspf`    | 修改     | +131 / +2 | `<head>` + CSS 变量 | **定义全局 CSS 变量** `--bg`、`--surface`、`--fg`、`--muted`、`--border`、`--accent`、`--accent-dim`、`--font-sans`、`--font-mono`；新增两条 `<link rel="icon">` / `<link rel="apple-touch-icon">` 指向 `new-touch-icon.svg`，让浏览器 tab 真正使用新 SVG（仅改 `manifest.json` 不够）                       |
 | `src/main/webapp/menu.jspf`          | 修改     | +1001     | 顶部搜索表单 + 项目 chips | 搜索表单 UI 重构；`chip` 选中状态从 HTML `selected` 属性改为 `.selected` class（修复 `_menuSelAttr` bug）                                                                                                                 |
 | `src/main/webapp/projects.jspf`      | 修改     | +37       | 项目 cookie 持久化     | 接入新 chrome                                                                                                                                                                                            |
 | `src/main/webapp/breadcrumb.jspf`    | **新增** | +228      | 面包屑导航             | 新设计片段，被 list.jsp / history.jsp 等包含                                                                                                                                                                    |
@@ -245,6 +245,7 @@ irm -Headers @{Authorization = "Bearer dev-token-123"} `
 - `pageheader.jspf`、`foot.jspf`、`httpheader.jspf`、`menu.jspf`、`projects.jspf`、`breadcrumb.jspf`、`chrome-guards.jspf`、`pager.jspf`
 - **冲突点**：master 可能新增 CSS 类、新增 include；我们新增了 CSS 变量（`--bg` 等）和 logo `<a>` 链接
 - **迁移方法**：保留 master 新增的 include + 我们新增的 CSS 变量 / class；合并后跑一次 `index.jsp` 验证 chrome 显示
+- **httpheader.jspf 的 icon link**：迁移时务必保留两条我们新增的 `<link>`（指向 `new-touch-icon.svg`，`type="image/svg+xml"`），否则浏览器 tab favicon 会回退到旧 PNG。详见本文 **十**。
 
 #### B 组（业务页面 jsp）— 体量大，建议分文件迁移
 - `index.jsp`、`search.jsp`、`list.jsp`、`xref.jspf`、`history.jsp`、`diff.jsp`、`more.jsp`、`mast.jsp`、`minisearch.jspf`、`repos.jspf`
@@ -482,10 +483,10 @@ try {
 
 这两处改动**不在 Git 仓库内**，但对 8081 Jetty 上跑新版 UI 至关重要。
 
-| # | 改动 | 原因 | 影响范围 |
-|---|---|---|---|
-| 1 | 新增 `<void property="authenticationTokens">` 块，注入 token `dev-token-123` | master 的 `IncomingFilter`（commit `76502c4bd`）已删除 localhost bypass。`/api/v1/application.wadl` 不在白名单，无 token 即 401 | 8081 + 升级后的 8080 |
-| 2 | 新增 `<void property="allowInsecureTokens"><boolean>true</boolean></void>` | 本地开发全是 HTTP，`request.isSecure()` 永远 false；不开此项 token 也通不过 | 同上 |
+| # | 改动                                                                       | 原因                                                                                                               | 影响范围             |
+|---|--------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|------------------|
+| 1 | 新增 `<void property="authenticationTokens">` 块，注入 token `dev-token-123`   | master 的 `IncomingFilter`（commit `76502c4bd`）已删除 localhost bypass。`/api/v1/application.wadl` 不在白名单，无 token 即 401 | 8081 + 升级后的 8080 |
+| 2 | 新增 `<void property="allowInsecureTokens"><boolean>true</boolean></void>` | 本地开发全是 HTTP，`request.isSecure()` 永远 false；不开此项 token 也通不过                                                        | 同上               |
 
 **XML 片段（完整 diff）**：
 
@@ -528,3 +529,38 @@ curl -H "Authorization: Bearer dev-token-123" http://localhost:8081/api/v1/appli
 ```
 
 详见上文 **F.2** 段（含 why / what / 迁移检查清单）。
+
+---
+
+## 十、补充：品牌图标 SVG 化（`new-touch-icon.svg`）
+
+### 10.1 背景
+
+旧 UI 的浏览器标签页 favicon / PWA icon 是 `default/img/apple-touch-icon.png`（512×512 栅格 PNG）。本次重构新画一张矢量 SVG，与 `favicon.svg` 共用 `{O` 路径数据，确保任意 DPI 下边缘都干净；同时给 Android launcher 加白底圆角以兼容 `purpose: "any maskable"`。
+
+### 10.2 文件改动
+
+| 文件                                                       | 类型     | 行数 +/− | 作用              | 关键改动                                                                                                                                                          |
+|----------------------------------------------------------|--------|---------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `src/main/webapp/default/img/new-touch-icon.svg`         | **新增** | +41     | 512×512 矢量图标    | 复刻 `favicon.svg` 的 `{` / `O` 路径（`#656664` / `#4783A3`），viewBox `0 0 16 16`，外面套 `clipPath rx=3.2` + 白色 `<rect>` 做 maskable 安全边                                            |
+| `src/main/webapp/manifest.json`                          | 修改     | +7/-3   | PWA manifest    | `icons[]` 第一项改为新 SVG（`type: image/svg+xml` / `sizes: any` / `purpose: any maskable`），保留 PNG 作为 fallback                                                          |
+| `src/main/webapp/httpheader.jspf`                        | 修改     | +2      | `<head>` 标签     | **关键**：浏览器 tab favicon 由这里决定，不读 `manifest.json`。在原 `<link rel="icon">` 之前插入 `<link rel="icon" type="image/svg+xml" sizes="any" href=".../new-touch-icon.svg">`；同时给 `<link rel="apple-touch-icon">` 加 SVG 版本 |
+
+### 10.3 为什么仅改 `manifest.json` 不够
+
+`manifest.json` 是 **PWA only** 协议——浏览器仅在「安装为 PWA」或「添加到主屏幕」时才读取 `icons[]`。日常浏览的 tab favicon 完全由 `<link rel="icon">` 决定。一开始只更新了 `manifest.json`，结果浏览器 tab 仍然展示旧的 PNG，于是有了 10.2 里 `httpheader.jspf` 的那一行额外 `<link>`——这才是真正让新图标生效的位置。
+
+### 10.4 迁移到 master 时
+
+| 文件                  | 操作                                                                                                                                                       |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `new-touch-icon.svg` | master 上不存在 → 直接把 `default/img/new-touch-icon.svg` 拷过去（**新增文件**，不会冲突）                                                                                       |
+| `manifest.json`     | master 可能改过 `icons[]`。合并时保留我们把 SVG 放在数组第一位的改动，其余按 master 来的 merge                                                                                                  |
+| `httpheader.jspf`   | 合并时检查 `<link rel="icon" ...>` 块，确保我们加的两条 link 都还在：① `type="image/svg+xml" sizes="any" href=".../new-touch-icon.svg"`；② `rel="apple-touch-icon" type="image/svg+xml" sizes="any" href=".../new-touch-icon.svg"` |
+
+### 10.5 验证清单
+
+- [ ] DevTools → Network → 过滤 `img` 类型，确认对 `http://localhost:8081/` 的请求里出现 `new-touch-icon.svg` 200，Content-Type `image/svg+xml`
+- [ ] DevTools → Application → Manifest，确认 `icons[]` 第一项是 SVG 且 `purpose: "any maskable"`
+- [ ] 浏览器 tab 收藏夹图标 → 应显示 `{O` 矢量标记
+- [ ] Android Chrome → 菜单 → 添加到主屏幕 → 启动器图标 → 应显示白底圆角版本
