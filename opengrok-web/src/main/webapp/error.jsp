@@ -32,11 +32,12 @@ jakarta.servlet.http.HttpServletResponse"%>
 
 <style>
 :root {
+    /* Theme colours are fragment-local. Font variables (--font-sans / --font-mono)
+     * live in httpheader.jspf :root and are inherited from there. */
     --fg:        #24292f;
     --bg:        #f6f8fa;
     --border:    #d0d7de;
     --border-light: #eaeef2;
-    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 .error-page { max-width: 920px; font-size: 14px; color: var(--fg); line-height: 1.6; }

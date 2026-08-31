@@ -1273,8 +1273,8 @@ a.scope            { /* scope              */ color: var(--og-symbol-scope-fg); 
 
 @font-face {
     font-display: swap;
-    font-family: SunSans;
-    src: url('./font/SunSansRegular.woff2') format('woff2');
+    font-family: 'MapleMono NF CN';
+    src: url('./font/MapleMonoNF-CN-Regular.woff2') format('woff2');
 }
 
 .link-no-decoration {
@@ -1282,7 +1282,7 @@ a.scope            { /* scope              */ color: var(--og-symbol-scope-fg); 
 }
 
 .logo {
-    font-family: SunSans, sans-serif;
+    font-family: 'MapleMono NF CN', sans-serif;
     font-size: 1.6153846153846154em;
     vertical-align: middle;
 }
@@ -1297,7 +1297,7 @@ a.scope            { /* scope              */ color: var(--og-symbol-scope-fg); 
 
 #served-by {
     color: #B8BAB7;
-    font-family: SunSans, sans-serif;
+    font-family: 'MapleMono NF CN', sans-serif;
     font-size: 1.1538461538461537em;
     vertical-align: middle;
 }

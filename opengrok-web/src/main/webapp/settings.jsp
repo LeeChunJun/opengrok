@@ -29,9 +29,10 @@ org.opengrok.indexer.configuration.RuntimeEnvironment"%>
 
 <style>
 :root {
+    /* Theme colours are fragment-local. Font variables (--font-sans / --font-mono)
+     * live in httpheader.jspf :root and are inherited from there. */
     --fg:        #24292f;
     --accent:    #0969da;
-    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
 }
 
 .settings-page { max-width: 640px; }

@@ -543,7 +543,7 @@ body.lines-hidden .code-area pre span.unfold-icon {
 .window {
     position: fixed;
     font-size: 12px;
-    font-family: monospace;
+    font-family: var(--font-mono);
     overflow: hidden;
     z-index: 10;
 }
@@ -556,7 +556,7 @@ body.lines-hidden .code-area pre span.unfold-icon {
 }
 .window-header .pull-left {
     float: left;
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     font-weight: 600;
     color: #333;
@@ -751,7 +751,7 @@ body.lines-hidden .code-area pre span.unfold-icon {
 #intelli_win h2 {
     font-size: 16px;
     font-weight: 700;
-    font-family: monospace;
+    font-family: var(--font-mono);
 }
 
 /* ── Window close button (×) ──

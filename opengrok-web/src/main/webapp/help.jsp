@@ -32,12 +32,13 @@ org.opengrok.indexer.web.SearchHelper"%>
 
 <style>
 :root {
+    /* Theme colours are fragment-local. Font variables (--font-sans / --font-mono)
+     * live in httpheader.jspf :root and are inherited from there. */
     --fg:        #24292f;
     --muted:     #57606a;
     --bg:        #f6f8fa;
     --border:    #d0d7de;
     --border-light: #eaeef2;
-    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     --accent:    #0969da;
 }
 

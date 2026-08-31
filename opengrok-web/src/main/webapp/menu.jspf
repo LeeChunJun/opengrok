@@ -106,10 +106,8 @@ for (Project _menuP : _menuProjects) {
     --accent-dim: rgba(59, 130, 246, 0.08);
     --green: #22c55e;
     --green-dim: rgba(34, 197, 94, 0.10);
-    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-        system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace,
-        Menlo, monospace;
+    /* Font variables (--font-sans / --font-mono) live in httpheader.jspf :root
+     * and are inherited from there. */
 }
 
 .menu-root .search-hero {
