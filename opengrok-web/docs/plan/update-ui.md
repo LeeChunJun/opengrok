@@ -94,6 +94,60 @@
 | `src/main/webapp/WEB-INF/web.xml` | 修改 | +24    | Web 应用配置 | 注册 `CharacterEncodingFilter`（`/*`，`REQUEST`+`FORWARD` dispatcher）；`configuration.xml` 路径指向本地（`D:\Programs\opengrok\etc\configuration.xml`） |
 | `opengrok-web/pom.xml`            | 修改 | +21    | Maven 构建 | Jetty 插件升级到 `org.eclipse.jetty.ee10:jetty-ee10-maven-plugin:12.0.10`；`httpConnector.port=8081`；jvmArgs 增加 `--add-opens` / `--add-exports`  |
 
+#### F.2 运行时配置文件 `D:\Programs\opengrok\etc\configuration.xml`（在仓库外，必读）
+
+> 该文件不在 Git 仓库里、但被 8080 Tomcat 和 8081 Jetty **共享**。重构 commit 里**没有**改动它——下面的两段是 UI 重构验收期间为了「从 8081 也能调通 `/api/v1/*`」手动注入的运行时参数。**部署到任何新机器时都要重新注入一次**。
+
+**改动 1：注入 API token（让 IncomingFilter 通过）**
+
+- 原因：master 上 commit `76502c4bd remove localhost bypass for API checks (#4944)` 移除了「localhost 免 token」快捷通道。新 UI 在 Jetty 8081 上跑时，调 `GET /api/v1/application.wadl`（以及任何不在 `IncomingFilter.allowedPaths` 白名单里的 endpoint）一律 401——因为 `configuration.xml` 里 `authenticationTokens` 是空集。
+- 改动位置：`configuration.xml` 末尾的 `</object>` 闭合前（即 `Configuration0` 的最后一个 `<void property="...">` 之后）。
+- 改动内容：
+  ```xml
+  <void property="authenticationTokens">
+   <object class="java.util.HashSet">
+    <void method="add">
+     <string>dev-token-123</string>
+    </void>
+   </object>
+  </void>
+  ```
+- 效果：调用任何 `/api/v1/*` 时带 `Authorization: Bearer dev-token-123` 即可通过 `IncomingFilter` 第一道闸。
+- ⚠ 改动 1 必须配改动 2，否则 token 仍被拒。
+
+**改动 2：允许 token 通过明文 HTTP**
+
+- 原因：即使 token 正确，`IncomingFilter` 还要求 `request.isSecure() || isAllowInsecureTokens()`，否则记录 `request to xxx has a valid token however is not secure` 后 401。本地开发全是 HTTP，没法满足 `isSecure()`，所以必须打开 `allowInsecureTokens`。
+- 改动位置：紧接改动 1 之后。
+- 改动内容：
+  ```xml
+  <void property="allowInsecureTokens">
+   <boolean>true</boolean>
+  </void>
+  ```
+- 效果：token 在 HTTP / HTTPS 上都生效。
+- ⚠ **生产环境必须改成 `false` 并配 HTTPS**。`true` 等同于把 API 完全暴露给任何能拿到 token 的人（HTTP 抓包即泄漏）。
+
+**为什么 8080 Tomcat 现在仍然不感知这两段改动？**
+
+8080 Tomcat 上跑的 `webapps/source.war` 是 2026-01-24 编译的，构建基线早于 `76502c4bd`，所以那个 war 里的 `IncomingFilter` 仍然有 localhost bypass——它在源码里**根本不会读取** `authenticationTokens`，配置改了也无所谓。两端口行为暂时不一致是正常的；等 8080 war 升级到含 `76502c4bd` 的版本后，这两段配置就会自动生效。
+
+**迁移检查清单（每次换部署机器或重装系统时跑一次）**
+
+```powershell
+# 1. 验证两段 XML 都在
+Select-String -Path "D:\Programs\opengrok\etc\configuration.xml" `
+  -Pattern "authenticationTokens|allowInsecureTokens"
+
+# 2. 重启 Jetty 8081 让改动生效（Tomcat 视情况）
+$pid = (Get-NetTCPConnection -LocalPort 8081 -State Listen).OwningProcess
+if ($pid) { Stop-Process -Id $pid -Force }
+
+# 3. 验证 token 通过
+irm -Headers @{Authorization = "Bearer dev-token-123"} `
+     "http://localhost:8081/api/v1/application.wadl"
+```
+
 ### G. 文档
 
 | 文件                                  | 类型     | 作用                                      |
@@ -214,6 +268,7 @@
 - `web.xml`、`pom.xml`
 - **冲突点**：master 可能新增 filter / servlet
 - **迁移方法**：保留我们的 `CharacterEncodingFilter` 注册；保留 master 新增 filter 时按字母顺序插入到 `<filter>` 列表
+- **运行时配置（非仓库内）**：不要忘了 `D:\Programs\opengrok\etc\configuration.xml` 里的两段手动改动——`authenticationTokens`（注入 token）+ `allowInsecureTokens=true`（HTTP 环境必加）。详见上文 **F.2**。master 同步后这两段不动。
 
 ### 4.2 关键 grep 命令
 
@@ -420,3 +475,56 @@ try {
 ## 八、一句话总结
 
 > **本次重构把 `opengrok-web/src/main/webapp/` 下 50 个文件改成新 UI 风格（卡片 + 中文 + CSS 变量 + 现代字体），新增 4 个 jspf / 1 个 Filter / 1 个 Filter 配置 / 6 个设计稿 / 1 份运行文档，删除 4 个不再使用的 tag 文件。新 UI 在 Jetty 8081 上跑（旧 UI Tomcat 8080 不动），迁移 master 时按 A→F 顺序逐组处理，重点保护 jspf include + CSS 变量 + `_search*` 等关键命名。**
+
+---
+
+## 九、补充：运行时配置文件 `configuration.xml` 的两处手动改动
+
+这两处改动**不在 Git 仓库内**，但对 8081 Jetty 上跑新版 UI 至关重要。
+
+| # | 改动 | 原因 | 影响范围 |
+|---|---|---|---|
+| 1 | 新增 `<void property="authenticationTokens">` 块，注入 token `dev-token-123` | master 的 `IncomingFilter`（commit `76502c4bd`）已删除 localhost bypass。`/api/v1/application.wadl` 不在白名单，无 token 即 401 | 8081 + 升级后的 8080 |
+| 2 | 新增 `<void property="allowInsecureTokens"><boolean>true</boolean></void>` | 本地开发全是 HTTP，`request.isSecure()` 永远 false；不开此项 token 也通不过 | 同上 |
+
+**XML 片段（完整 diff）**：
+
+```diff
+   <void property="tagsEnabled">
+    <object idref="Boolean0"/>
+   </void>
++  <void property="authenticationTokens">
++   <object class="java.util.HashSet">
++    <void method="add">
++     <string>dev-token-123</string>
++    </void>
++   </object>
++  </void>
++  <void property="allowInsecureTokens">
++   <boolean>true</boolean>
++  </void>
+  </object>
+ </java>
+```
+
+**生产部署 checklist**（任何时候把 UI 搬到新机器或新 Tomcat 实例时都要做一次）：
+
+1. 备份：`Copy-Item "D:\Programs\opengrok\etc\configuration.xml" "configuration.xml.bak" -Force`
+2. 注入上面这两段
+3. **把 `<string>dev-token-123</string>` 换成至少 32 位的随机串**（生产用）
+4. **生产环境把 `allowInsecureTokens` 改回 `false` 并配 HTTPS**
+5. 重启两个端口让 `RuntimeEnvironment` 缓存的 token 集合刷新
+
+**验证**：
+
+```powershell
+# 8081 应返回 200
+irm -Headers @{Authorization = "Bearer dev-token-123"} `
+     "http://localhost:8081/api/v1/application.wadl"
+```
+
+```bash
+curl -H "Authorization: Bearer dev-token-123" http://localhost:8081/api/v1/application.wadl
+```
+
+详见上文 **F.2** 段（含 why / what / 迁移检查清单）。
