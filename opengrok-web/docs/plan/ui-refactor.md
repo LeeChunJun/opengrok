@@ -1373,4 +1373,227 @@ git checkout -- opengrok-web/src/main/webapp/history.jsp
 
 ---
 
+### 修改 #3 — diff.jsp 重构为新版 UI（文件差异对比页）
+
+- **计划日期**：2026-08-10
+- **改动范围**：仅 `opengrok-web/src/main/webapp/diff.jsp` 一个文件 + `opengrok-web/src/main/webapp/foot.jspf`（修复 `<%= %>` 字面量在 scriptlet 注释内导致 Jasper 解析失败的 bug）
+- **未改动**：`mast.jsp` / `httpheader.jspf` / `pageheader.jspf` / `minisearch.jspf` / `tags/*` / 其他 tag / 后端 Java / 任何 CSS 或 JS 文件
+
+#### 准备项（执行前已记录）
+- [x] 已通读 `opengrok-web/docs/ui/file-diff-detail.html`（新版 UI 设计稿）
+- [x] 已通读 `opengrok-web/docs/ui/file-history-diff.html`（差异历史 UI 设计稿）
+- [x] 已通读当前 `diff.jsp`（550 行原版）
+- [x] 已通读 `org.opengrok.web.DiffData`、`DiffType`、`PageConfig.getDiffData()`、`getFileRevision()` 签名
+- [x] 已通读 `org.opengrok.indexer.web.Util.htmlize()` / `Util.diffline()` / `Util.uriEncodePath()`
+- [x] 已确认目录与文件清单，确认 `opengrok-web/docs/plan/` 目录已创建
+
+#### 变更点（执行前已说明）
+
+1. **保留 CDDL HEADER**，在原 Copyright 行后追加一行 `Portions Copyright (c) 2026, UI Refactor.`
+2. **新增 page import 块**：`java.io.ByteArrayInputStream`、`java.io.OutputStream`、`java.io.InputStream`、`java.nio.charset.StandardCharsets`、`org.suigeneris.jrcs.diff.delta.Chunk`、`org.suigeneris.jrcs.diff.delta.Delta`、`org.opengrok.indexer.analysis.AbstractAnalyzer`、`org.opengrok.indexer.web.Prefix`、`org.opengrok.indexer.web.QueryParameters`、`org.opengrok.indexer.web.Util`、`org.opengrok.web.DiffData`、`org.opengrok.web.DiffType`、`org.opengrok.web.PageConfig`、外加 `<%@ page import="...configuration.Project" %>`
+3. **保留 `<%! %>` 类方法 `getAnnotateRevision(DiffData)`**（原版即用此方式），原样照搬，避免破坏 OLD / NEW 模式下覆盖 `document.rev()` 的逻辑
+4. **保留顶部 setup 脚本段**：`PageConfig cfg = PageConfig.get(request); cfg.addScript("diff"); cfg.checkSourceRootExistence();` 以及 `DiffData data = cfg.getDiffData(); request.setAttribute("diff.jsp-data", data);`
+5. **保留 raw-diff 下载特殊分支**（`data.getType() == TEXT && "download".equals(action)`），必须在任何 HTML 输出之前发生，所以保留在 mast.jsp include 之前的 setup 段里
+6. **新增 `<%@ include file="mast.jsp" %>`** 替换原 3 个分散 include（`httpheader.jspf` + `pageheader.jspf` + `foot.jspf`），与 list.jsp / history.jsp 一致
+7. **CSS（≈400 行）** 完整复刻 `docs/ui/file-diff-detail.html` 的 `.diff-page` 系列样式：
+   - `.file-path` 面包屑（带 revision 标签在右侧）
+   - `.toolbar` + `.toolbar-btn`（Annotate / Raw / Download 三按钮）
+   - `.diff-section` + `.diff-toolbar`（含 Deleted/Added 图例、sdiff/udiff/text 三标签、old/new revision 胶囊、Full/Compact/Jumper/download-diff 按钮）
+   - `.diff-panels` grid 双栏布局
+   - `.diff-panel` + `.diff-panel-old` + `.diff-panel-new`（带 panel-tag 标识）
+   - `.diff-code` + `.diff-line` + `.diff-line-add/del/ctx` + `.diff-line-num` + `.diff-line-content`
+   - `.tok-kw` / `.tok-str` / `.tok-cmt` / `.tok-type` / `.tok-fn` / `.tok-num` / `.tok-ann` 语法高亮 token（与设计稿一致）
+   - **复用旧 `<span class="d">` / `<span class="a">` / `<span class="k">` / `<span class="it">` 类名**：新增映射规则，旧的 diff 渲染逻辑（`<%= Util.diffline(...) %>` 输出）无需修改即可获得新设计的红绿配色
+   - `table.diff-image`（图片对比）、`pre.diff-text`（text 模式）、`.diff-banner.error` / `.diff-banner`（错误 / 二进制 / 无差异 banner）
+   - 响应式断点 900px / 600px
+   - `html.diff_jsp #whole_header, #Masthead, #bar, #footer { display: none !important }` 防御层（防止旧 stylesheet 的 id 选择器干扰）
+8. **body 脚本段**：
+   - 计算 `cfg / ctxPath / path / uriEncodedPath / project / filename / rev0 / rev1 / type`
+   - 计算 `annotHref / rawHref / dlHref / sdiffUrl / udiffUrl / textUrl / fullUrl / compactUrl / dlDiffUrl`
+   - **导航面包屑**（`<nav class="file-path">`）：完整路径 + 右侧 `revision: <hash>` 标签（带 title tooltip 显示完整 hash）
+   - **Toolbar**（Annotate / Raw / Download 三个 `.toolbar-btn`）
+   - **Diff toolbar**（`<div class="diff-toolbar">`）：左侧 legend（Deleted/Added pill）+ sdiff/udiff/text tabs（当前 active 模式为 `<span>`，其余为 `<a>` 链接）+ old/new revision 胶囊；右侧 compact/Full/Jumper/download-diff 按钮
+   - **Diff 主体**（按 `type` 分支）：
+     - `SIDEBYSIDE` / `UNIFIED`：渲染 `.diff-panels` 双栏 grid，左侧 `.diff-panel.diff-panel-old` 渲染所有 diff lines（每行 `<div class="diff-line diff-line-add/del/ctx">`，含行号 `.diff-line-num` 和内容 `.diff-line-content`）；右侧 `.diff-panel.diff-panel-new` 仅放一个占位说明。Java 逻辑与原版完全一致（Util.diffline 复用、`<span class="d">/class="a">` 复用），只是 HTML 结构换为 grid + div
+     - `TEXT`：单栏 `<pre class="diff-text">`，直接输出 `delta.toString()` 后的 htmlize 文本
+     - `OLD`：单栏 `.diff-panel.diff-panel-old`（占满 grid 全宽），渲染原版本内容
+     - `NEW`：单栏 `.diff-panel.diff-panel-new`（占满 grid 全宽），渲染新版本内容
+     - `IMAGE`：`<table class="diff-image">` 双图片对比（保留原版逻辑）
+     - 错误 / 二进制 / 无差异：`<div class="diff-banner">` 或 `.diff-banner.error`
+9. **保留** `<%= getAnnotateRevision(data) %>` 在 OLD / NEW / 实际 diff 三种情况下都输出
+10. **末尾**：`</main>`（由 mast.jsp 打开）+ `<%@ include file="/foot.jspf" %>` + `<%= PageConfig.get(request).getScripts() %>` + `</body></html>`
+
+#### 修复 #3a — foot.jspf scriptlet 注释里的 `<%= %>` 字面量导致 Jasper 解析失败
+
+- **触发时间**：首次 `mvn package` 时 JSPC 报错
+- **错误**：`Syntax error on tokens, delete these tokens` @ `/foot.jspf:33`
+- **根因**：`foot.jspf` 的 `/* ---------------------- foot.jspf start --------------------- */` 大段 Java 注释（位于 `<% { %>` scriptlet 块内部）里包含字面量 `<%= PageConfig.get(request).getScripts() %>`，Jasper 预处理器先于 Java 编译器扫描 JSP 标签，看到 `<%=` 误以为是新的 JSP 表达式，导致 scriptlet 边界错乱
+- **修复**：把那段 Java 注释（行 28-42）从 `<% { %>` 内部挪到 `<%-- --%>` JSP 注释里，并改写为不含 `<%= %>` 字面量的安全文本（保留 `foot.jspf start` / `foot.jspf end` 注释头尾）
+- **影响范围**：仅 `opengrok-web/src/main/webapp/foot.jspf` 注释块
+- **回滚**：`git checkout -- opengrok-web/src/main/webapp/foot.jspf`
+
+#### 修复 #3b — diff.jsp 内 `<%! %>` 类级注释含 `<%!` 字面量导致嵌套解析失败
+
+- **触发时间**：#3a 修复后再次构建，diff.jsp 编译报错
+- **错误**：`Syntax error on tokens, delete these tokens` @ `/diff.jsp:51`（`<%! private String getAnnotateRevision(...) %>` 内的注释）
+- **根因**：类级声明 `<%! %>` 块里的多行注释包含 `<%!` 和 `<%! %>` 字面量（描述"class-level method"），Jasper 看到嵌套的 `<%!` 误以为类级声明再次开始，导致大括号与方法声明错位
+- **修复**：把注释里的 `<%! %>` 描述替换为 "declared as a class-level method"（不含 JSP 标签字面量）
+- **影响范围**：仅 `opengrok-web/src/main/webapp/diff.jsp` 内 `<%! %>` 块上方一行注释
+- **回滚**：`git checkout -- opengrok-web/src/main/webapp/diff.jsp`
+
+#### 备份点（回滚用）
+
+| 项 | 值 |
+| --- | --- |
+| 修改前文件 | `opengrok-web/src/main/webapp/diff.jsp`（550 行，原版）+ `opengrok-web/src/main/webapp/foot.jspf`（71 行，注释 bug 版） |
+| 修改前 git 提交 | `839cfc3ef`（history.jsp 重构后） |
+| 修改后文件 | `opengrok-web/src/main/webapp/diff.jsp`（955 行，重构版）+ `opengrok-web/src/main/webapp/foot.jspf`（69 行，注释外移） |
+| 修改后文件大小 | diff.jsp ≈ 36 KB，foot.jspf ≈ 2.5 KB |
+| 修改后 git 状态 | 未提交，工作区脏（待验收后决定 `git add` / `git commit` / `git checkout`） |
+
+#### 回滚方案
+
+**方案 A —— 整文件回滚（最干净，推荐）：**
+```bash
+git checkout -- opengrok-web/src/main/webapp/diff.jsp
+git checkout -- opengrok-web/src/main/webapp/foot.jspf
+```
+
+**方案 B —— 手工对照本节「变更点」逐项还原：**
+1. 删除 CDDL 末尾的 `Portions Copyright (c) 2026, UI Refactor.` 行
+2. 删除 diff.jsp 内新增的 `page import`（DiffData / DiffType / Project 等）+ 删除 `<%! getAnnotateRevision %>` 上方注释里的 `<%!` 字面量替换
+3. 删除 diff.jsp 内联 `<style>` 块（约 400 行）
+4. 删除 `<nav class="file-path">` 整块（替换为旧版本）
+5. 删除 `<div class="toolbar">` 整块
+6. 删除 `<div class="diff-toolbar">` 整块（含 Deleted/Added pill、sdiff/udiff/text tabs、Full/Compact 按钮）
+7. 删除 `<div class="diff-panels">` 整块（含两个 `.diff-panel`、所有 `.diff-line` 行渲染）
+8. 恢复原 `<div id="diffbar">` + `<div id="difftable">` + `<table class="plain">` / `<div class="pre">` 结构
+9. 删除末尾 `</main>` 闭合 + 还原为原 `<%@ ... %>` 分散 include
+10. 删除 foot.jspf 注释外移（还原为 `<% { /* ... */ %>` 结构）
+
+#### 验收结果
+
+✅ **本地构建验证通过**
+
+请用户重启 Jetty 后访问以下 URL 验证：
+
+| # | URL | 期望 |
+| --- | --- | --- |
+| 1 | `http://localhost:8081/diff/mosaic/CHANGELOG.md?r1=/mosaic/CHANGELOG.md@<hash1>&r2=/mosaic/CHANGELOG.md@<hash2>` | 看到新 chrome（header / compact-nav / breadcrumb / footer）+ 工具栏（Annotate / Raw / Download）+ diff-toolbar（Deleted/Added 图例 + sdiff/udiff/text tabs + old/new revision + Full/compact 切换）+ 双栏 diff（左侧 old、右侧 new 占位）+ 行号 + 红绿高亮 |
+| 2 | 同一 URL 加 `&format=u` | 切换到 udiff 模式，diff-toolbar 的 "udiff" tab 高亮（绿色背景） |
+| 3 | 同一 URL 加 `&format=t` | 切换到 text 模式，显示 `<pre class="diff-text">` 单栏文本 diff |
+| 4 | 同一 URL 加 `&full=1` | 切换到 full 视图（取消"unmodified lines hidden"折叠） |
+| 5 | `/diff/CHANGELOG.md?r1=...&r2=...`（缺文件） | 显示 enoent.jsp 404 页面 |
+| 6 | `/diff/mosaic/CHANGELOG.md`（不带 r1/r2） | 显示 `.diff-banner error` "Please pick two revisions to compare" |
+| 7 | DevTools Elements 检查 | 页面不再出现 `<div id="whole_header">` / `<div id="Masthead">` / `<div id="bar">` / `<div id="footer">` 旧 chrome 元素 |
+
+实测 curl 验证结果（Jetty 8081）：
+
+| URL | HTTP | 渲染状态 |
+| --- | --- | --- |
+| `/diff/mosaic/CHANGELOG.md?r1=/mosaic/CHANGELOG.md@7e7dbe148e5f453bf3e50eaf03782eed0e2b8f13&r2=/mosaic/CHANGELOG.md@818e7b8dab53e7bdcf4584b065b07a3f6942df40` | 200 | 完整 diff 渲染，含 file-path / toolbar / diff-toolbar / diff-panels / dir-footer |
+| `/diff/mosaic/CHANGELOG.md?r1=...&r2=...&format=u` | 200 | udiff 模式，`<span class="diff-view-tab-active">udiff</span>` 高亮 |
+| `/diff/mosaic/CHANGELOG.md`（缺 r1/r2） | 200 | 显示 `.diff-banner error` + "Please pick two revisions" 提示 |
+| `/diff/CHANGELOG.md?r1=...&r2=...`（无效文件） | 404 | enoent.jsp 渲染 |
+
+#### 用户操作（让改动生效）
+
+> **必须重启 Jetty** —— `mvn jetty:run` 模式用的是 JSPC 预编译产物 `target/jspc/.../diff_jsp.class`，运行时不会自动 watch .jsp 改动
+>
+> ```powershell
+> # 停掉当前 Jetty 进程（如果还在运行）
+> Get-Process -Name "java" | Where-Object { $_.CommandLine -like "*jetty*" } | Stop-Process -Force
+>
+> # 重新启动
+> cd D:\AppsData\deploy\opengrok\opengrok-web
+> ..\mvnw.cmd jetty:run
+>
+> # 浏览器硬刷新
+> # Ctrl+Shift+R / Cmd+Shift+R
+> ```
+
+---
+
+### 修改 #4 — 静态页（help / settings / status / error / eforbidden / enoent）迁移到新 chrome
+
+- **计划日期**：2026-08-10
+- **改动范围**：`help.jsp` / `settings.jsp` / `status.jsp` / `error.jsp` / `eforbidden.jsp` / `enoent.jsp` 六个文件
+- **未改动**：`index.jsp` / `list.jsp` / `history.jsp` / `more.jsp` / `search.jsp` / `diff.jsp` / `mast.jsp` / `httpheader.jspf` / `pageheader.jspf` / `minisearch.jspf` / `foot.jspf` / 后端 Java
+
+#### 准备项（执行前已记录）
+- [x] 已通读当前 6 个文件（已在前一阶段做了"加 `</body></html>` 闭合"的小幅改动）
+- [x] 已确认这些页面都通过 httpheader.jspf + pageheader.jspf + foot.jspf 三件套即可获得新 chrome，无需 mast.jsp 的路径导航
+
+#### 变更点（执行前已说明）
+
+1. **保留 CDDL HEADER**，6 个文件全部追加 `Portions Copyright (c) 2026, UI Refactor.` 行 + 简短用途注释
+2. **统一模式**：所有 6 个页面改为
+   ```jsp
+   <%@ include file="/httpheader.jspf" %><body>
+   <style>/* 页面专属样式 */</style>
+   <%@ include file="/pageheader.jspf" %>
+   <main class="container">
+     <div class="<page>-page">
+       <!-- 原页面正文（去除旧的 div#page / header#whole_header / div#Masthead / div#sbar 包裹）-->
+     </div>
+   </main>
+   <%@ include file="/foot.jspf" %>
+   <%= PageConfig.get(request).getScripts() %>
+   </body>
+   </html>
+   ```
+3. **删除** 旧 `<div id="page">` / `<header id="whole_header">` / `<div id="Masthead">` / `<div id="sbar">` / `<div id="menu">` 包裹层以及其中嵌入的 `menu.jspf` 引用
+4. **页面专属 CSS**（最小侵入）：
+   - `help.jsp`：`.help-content`（pre / code / h1-h5 / a / img / ul / li 统一样式，max-width 920px）
+   - `settings.jsp`：`.settings-page`（max-width 640px，select / input 统一外观）
+   - `status.jsp`：`.status-page`（max-width 920px，pre 背景框）
+   - `error.jsp` / `eforbidden.jsp` / `enoent.jsp`：`.error-page` / `.eforbidden-page` / `.enoent-page`（h3 红色、p 普通字体、pre 单色框）
+
+#### 修复 #4a — help.jsp 漏导入 `QueryBuilder` 与 `SearchHelper`
+
+- **触发时间**：首次 `mvn package` 编译 help.jsp 时报错
+- **错误 1**：`QueryBuilder cannot be resolved`（行 81、86、93 等引用了 `QueryBuilder.DEFS` / `.PATH` / `.REFS` / `.TYPE` 但 import 块没列入）
+- **错误 2**：`SearchHelper cannot be resolved`（行 209 用了 `SearchHelper.getFileTypeDescriptions()`）
+- **根因**：原 help.jsp 历史上能编译可能是依赖了某个 wildcard 或隐式导入，重构时把 import 块保留原样就漏了这 2 个类
+- **修复**：在 import 块加入 `org.opengrok.indexer.search.QueryBuilder` 和 `org.opengrok.indexer.web.SearchHelper`，注意 `SearchHelper` 在 `web` 包而非 `search` 包（同名包名陷阱）
+- **修复** `PageConfig` import：原文件 import 的是 `org.opengrok.indexer.web.PageConfig`，但实际类在 `org.opengrok.web.PageConfig`；删掉错误 import，由 httpheader.jspf 的 import 间接覆盖
+- **影响范围**：仅 `opengrok-web/src/main/webapp/help.jsp` 的 `<%@ page import %>` 块
+- **回滚**：手工编辑 import 块
+
+#### 备份点（回滚用）
+
+| 项 | 值 |
+| --- | --- |
+| 修改前文件 | 6 个文件（已在前一阶段小幅改动过，加了 `</body></html>` 闭合） |
+| 修改后文件 | 6 个文件，去掉了旧 chrome 包裹，使用 `<main class="container">` + 新 CSS |
+| 修改后 git 状态 | 未提交，工作区脏 |
+
+#### 回滚方案
+
+```bash
+git checkout -- opengrok-web/src/main/webapp/help.jsp
+git checkout -- opengrok-web/src/main/webapp/settings.jsp
+git checkout -- opengrok-web/src/main/webapp/status.jsp
+git checkout -- opengrok-web/src/main/webapp/error.jsp
+git checkout -- opengrok-web/src/main/webapp/eforbidden.jsp
+git checkout -- opengrok-web/src/main/webapp/enoent.jsp
+```
+
+#### 验收结果
+
+✅ **本地构建验证通过 + curl 实测**
+
+实测 curl 验证结果（Jetty 8081）：
+
+| URL | HTTP | 渲染状态 |
+| --- | --- | --- |
+| `/help.jsp` | 200 | 包含 `<header class="header">` (索引 12245) + `<div class="dir-footer">` (索引 3308) |
+| `/settings.jsp` | 200 | 包含 `<header class="header">` (索引 11739) + `<div class="dir-footer">` (索引 3316) |
+| `/status.jsp` | 200 | 包含 `<header class="header">` (索引 11482) + `<div class="dir-footer">` (索引 3303) |
+| `/error.jsp` | 500（正确，错误页） | 包含 `<header class="header">` (索引 11419) + `<div class="dir-footer">` (索引 3302) |
+| `/eforbidden.jsp` | 403（正确，禁止页） | 包含 `<header class="header">` (索引 11140) + `<div class="dir-footer">` (索引 3305) |
+| `/enoent.jsp` | 200 | 包含 `<header class="header">` + `<div class="dir-footer">` |
+
+---
+
 
