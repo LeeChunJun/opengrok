@@ -63,11 +63,9 @@ org.opengrok.web.Scripts"%>
 <meta name="generator" content="{OpenGrok <%=Info.getVersion()%> (<%=Info.getRevision()%>)" />
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" data-theme-color-light>
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1e1f22" data-theme-color-dark>
-<link rel="icon" type="image/svg+xml" sizes="any" href="<%=styleDir%>/img/new-touch-icon.svg">
 <link rel="icon" href="<%=styleDir%>/img/favicon.svg">
 <link rel="mask-icon" href="<%=styleDir%>/img/mask-icon.svg" color="#000000">
 <link rel="apple-touch-icon" href="<%=styleDir%>/img/apple-touch-icon.png">
-<link rel="apple-touch-icon" type="image/svg+xml" sizes="any" href="<%=styleDir%>/img/new-touch-icon.svg">
 <link rel="manifest" href="<%=httpCtxPath%>/manifest.json">
 <link rel="preload" href="<%=styleDir%>/font/SunSansRegular.woff2" as="font" type="font/woff2" crossorigin>
 <script type="text/javascript">
