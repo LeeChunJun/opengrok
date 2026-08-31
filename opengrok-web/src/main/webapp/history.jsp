@@ -109,6 +109,13 @@ org.opengrok.indexer.web.Util"
 <%-- Mark the History pill as active for this page. --%>
 <% pageContext.setAttribute("activeNav", "history"); %>
 <%@ include file="pageheader.jspf" %>
+
+<%-- Shared pagination chrome (independent <style> block). Must be
+     included OUTSIDE any other <style> block because pager.jspf emits
+     its own complete <style>...</style>; nesting two <style> blocks
+     inside one another makes the inner rules invisible to the browser. --%>
+<%@ include file="pager.jspf" %>
+
 <main class="container">
 <style>
 /* ── history.jsp page-specific styles ── */
@@ -251,35 +258,12 @@ tr.revtags td { background: var(--accent-dim); border-bottom: 1px solid var(--bo
 tr.revtags .bold { font-weight: 600; }
 tr.revtags-hidden { display: none; }
 
-.pagination {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 20px 0 8px;
-    flex-wrap: wrap;
-}
-.pagination a, .pagination span {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 34px;
-    height: 34px;
-    padding: 0 10px;
-    border-radius: 7px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    font-size: 13px;
-    font-family: var(--font-sans);
-    font-weight: 500;
-    color: var(--fg);
-    cursor: pointer;
-    transition: all 0.12s;
-    text-decoration: none;
-}
-.pagination a:hover { background: #f3f4f6; border-color: #ccc; }
-.pagination span.sel { background: var(--accent); color: #fff; border-color: var(--accent); cursor: default; }
-.pagination span:not(.sel) { border-color: transparent; background: transparent; cursor: default; }
+/* ── Pagination ──
+ *
+ * Container / button / ellipsis rules live in pager.jspf (included
+ * earlier — see the top of this page). Do NOT include pager.jspf
+ * again here; nesting two <style> blocks inside one another makes
+ * the inner rules invisible to the browser. */
 
 .strike-note { font-size: 12.5px; color: var(--muted); margin: 16px 0 0; }
 .strike-note del { color: var(--muted); }
@@ -574,6 +558,24 @@ tr.revtags-hidden { display: none; }
         <%
         String slider;
         if ((slider = (String) request.getAttribute("history.jsp-slider")) != null) {
+            /* Util.createSlider() emits a legacy markup using
+             * <a class="more"> / <span class="sel"> / <span>...</span>.
+             * Translate to the shared .page-btn vocabulary used by
+             * index.jsp and search.jsp so the pager visual style
+             * (rounded buttons, accent-color active state, ellipsis
+             * dots) stays consistent across pages.
+             *
+             * - class="more"                  → class="page-btn"
+             * - class="sel"                   → class="page-btn active"
+             * - <span>...</span>              → <span class="page-ellipsis">…</span>
+             *
+             * Use form-feed / whitespace boundaries to keep the
+             * replacements from accidentally clobbering unrelated
+             * substrings (e.g. css class names elsewhere on the page). */
+            slider = slider
+                .replace("class=\"more\"", "class=\"page-btn\"")
+                .replace("class=\"sel\"", "class=\"page-btn active\"")
+                .replace("<span>...</span>", "<span class=\"page-ellipsis\">\u2026</span>");
             %><%= slider %><%
         }
         %>

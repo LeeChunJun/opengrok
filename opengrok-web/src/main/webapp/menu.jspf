@@ -716,8 +716,8 @@ for (Project _menuP : _menuProjects) {
             for (Project _menuP : _menuAllowedProjects) {
                 String _menuPname = _menuP.getName();
                 boolean _menuSel = _menuRequestedProjects.contains(_menuPname) || !_menuAnyRequested;
-                String _menuSelAttr = _menuSel ? " selected" : "";
-            %><div class="chip" <%= _menuSelAttr %>
+                String _menuSelClass = _menuSel ? " chip selected" : "";
+            %><div class="chip<%= _menuSelClass %>"
                 data-project="<%= Util.formQuoteEscape(_menuPname) %>">
                 <span class="chip-dot"></span>
                 <%= Util.htmlize(_menuPname) %>

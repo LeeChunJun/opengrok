@@ -74,6 +74,12 @@ org.opengrok.web.PageConfig"%>
      own <main>...</main> pair below. --%>
 <%@ include file="pageheader.jspf"%>
 
+<%-- Shared pagination chrome (independent <style> block). Must be
+     included OUTSIDE any other <style> block because pager.jspf emits
+     its own complete <style>...</style>; nesting two <style> blocks
+     inside one another makes the inner rules invisible to the browser. --%>
+<%@ include file="pager.jspf" %>
+
 <style>
 /* ── index.jsp page-specific styles ──────────────────────────────────────────
  *
@@ -488,118 +494,12 @@ main.container {
   transform: rotate(180deg);
 }
 
-/* ── Pagination ── */
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 20px 0 8px;
-}
-
-/* The top pagination mirrors the bottom one. We render two bars (above
- * the results-list and below the results-list) so the user can jump
- * pages without scrolling. The page config (current / total / pageSize)
- * is shared between them via renderPagination() in the inline script. */
-.pagination-top {
-  padding: 4px 0 12px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
-}
-
-.pagination-top:empty,
-.pagination:empty {
-  display: none;
-}
-
-.pagination-top .page-jump-hint {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.pagination-top .page-jump-hint input {
-  width: 56px;
-  height: 28px;
-  padding: 0 6px;
-  margin: 0 4px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: var(--font-sans);
-  color: var(--fg);
-  background: var(--surface);
-  text-align: center;
-  outline: none;
-}
-
-.pagination-top .page-jump-hint input:focus {
-  border-color: var(--accent);
-}
-
-.page-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 36px;
-  height: 36px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  font-family: var(--font-sans);
-  font-weight: 500;
-  color: var(--fg);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  text-decoration: none;
-}
-
-.page-btn:hover {
-  background: #f0f1f3;
-}
-
-.page-btn.active {
-  background: var(--accent);
-  color: #fff;
-}
-
-.page-btn.active:hover {
-  background: #1e40af;
-}
-
-.page-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-  pointer-events: none;
-}
-
-.page-btn.nav-btn {
-  color: var(--muted);
-  font-weight: 400;
-}
-
-.page-btn.nav-btn:hover {
-  color: var(--accent);
-}
-
-.page-btn.nav-btn svg {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 2;
-}
-
-.page-ellipsis {
-  min-width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  color: var(--muted);
-}
+/* ── Pagination ──
+ *
+ * Container / button / ellipsis rules live in pager.jspf (included
+ * earlier — see the top of this page). Do NOT include pager.jspf
+ * again here; nesting two <style> blocks inside one another makes
+ * the inner rules invisible to the browser. */
 
 /* ── Responsive — tablet / mobile ── */
 @media (max-width: 700px) {
@@ -609,7 +509,10 @@ main.container {
 
 @media (max-width: 480px) {
   .search-hero-heading { font-size: 19px; }
-  .pagination .page-btn:nth-child(n+5):nth-child(-n+8) { display: none; }
+  /* Pagination bar shrinking on narrow screens is now handled in
+   * pager.jspf; keep this rule empty so the page-specific block
+   * still exists as an anchor if other 480px tweaks are added
+   * later. */
 }
 
 /* ── jQuery UI autocomplete popup override ── */

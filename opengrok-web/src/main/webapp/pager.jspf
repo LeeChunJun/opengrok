@@ -1,0 +1,199 @@
+<%--
+CDDL HEADER START
+
+The contents of this file are subject to the terms of the
+Common Development and Distribution License (the "License").
+You may not use this file except in compliance with the License.
+
+See LICENSE.txt included in this distribution for the specific
+language governing permissions and limitations under the License.
+
+When distributing Covered Code, include this CDDL HEADER in each
+file and include the License file at LICENSE.txt.
+If applicable, add the following below this CDDL HEADER, with the
+fields enclosed by brackets "[]" replaced with your own identifying
+information: Portions Copyright [yyyy] [name of copyright owner]
+
+CDDL HEADER END
+
+
+
+Copyright (c) 2026, UI Refactor.
+--%>
+
+<%-- pager.jspf
+
+     Shared pagination chrome (CSS only — no HTML output).
+
+     Owns:
+       .pagination / .pagination-top       — flex container that holds
+       the page buttons. The top variant sits above the results list;
+       the bottom variant mirrors it below.
+       .page-btn                            — every page button (page
+       number, Previous, Next, ellipsis). Use as <a> for links and
+       <button> for JS handlers. .active highlights the current page.
+       .nav-btn                              — flattens the styling of
+       Previous/Next buttons (muted color, no background until hover).
+       .page-ellipsis                        — middle-of-slider dots.
+       .page-jump-hint                       — optional inline "go to
+       page N" input on the top bar.
+
+     Theme variables (--bg / --surface / --fg / --muted / --border /
+     --accent / --accent-dim / --font-sans / --font-mono) are defined
+     in httpheader.jspf and must NOT be redeclared here.
+
+     Disabled state is covered two ways:
+       - :disabled                       — works for <button disabled>
+       (used by index.jsp's JS renderPagination())
+       - .disabled                        — for <a class="page-btn
+       ... disabled"> (used by search.jsp's server-side render, since
+       <a> does not support the :disabled pseudo-class). Both share
+       the same visual treatment.
+
+     Pages that include this fragment should NOT redeclare any of
+     the .pagination* / .page-btn* / .page-ellipsis rules. --%>
+
+<style>
+/* ── Container ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 20px 0 8px;
+}
+
+/* The top pagination sits above the results list with a divider so
+ * it visually anchors to the data it paginates. */
+.pagination-top {
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+/* Empty state: a container with no buttons should collapse to zero
+ * height instead of leaving an empty 20px-tall strip. */
+.pagination-top:empty,
+.pagination:empty {
+  display: none;
+}
+
+/* Optional "go to page N" inline input. Currently rendered only by
+ * index.jsp's JS, but the rule lives here so other pages can opt in. */
+.pagination-top .page-jump-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pagination-top .page-jump-hint input {
+  width: 56px;
+  height: 28px;
+  padding: 0 6px;
+  margin: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--fg);
+  background: var(--surface);
+  text-align: center;
+  outline: none;
+}
+
+.pagination-top .page-jump-hint input:focus {
+  border-color: var(--accent);
+}
+
+/* ── Page button ──
+ *
+ * 36×36 minimum box for single-digit page numbers (1-9); grows
+ * horizontally to fit longer labels like "Previous" via min-width +
+ * padding. `display: inline-flex` + `justify-content: center` +
+ * `align-items: center` keeps the inner content centered both ways
+ * whether the host uses <a> (search.jsp) or <button> (index.jsp). */
+.page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  text-decoration: none;
+}
+
+.page-btn:hover {
+  background: #f0f1f3;
+}
+
+.page-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.page-btn.active:hover {
+  background: #1e40af;
+}
+
+/* Disabled pages can be either <button disabled> (index.jsp) or
+ * <a class="page-btn ... disabled"> (search.jsp) — the latter uses a
+ * custom class because <a> elements don't support the :disabled
+ * pseudo-class. Cover both forms with the same visual treatment. */
+.page-btn:disabled,
+.page-btn.disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Previous / Next buttons: muted by default, take the accent color
+ * on hover so they look like navigation affordances rather than
+ * page-number slots. */
+.page-btn.nav-btn {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.page-btn.nav-btn:hover {
+  color: var(--accent);
+}
+
+.page-btn.nav-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
+/* ── Ellipsis between page ranges ── */
+.page-ellipsis {
+  min-width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ── Responsive — tablet / mobile ──
+ *
+ * On very narrow screens hide the middle page-number buttons so
+ * Previous / page-1 / page-N / Next always fit on one line. The
+ * selectors target the 5th-8th flex children, which works as long
+ * as the bar is laid out as [Prev, 1, 2, 3, 4, …, N, Next] — the
+ * standard ordering used by both index.jsp and search.jsp. */
+@media (max-width: 480px) {
+  .pagination .page-btn:nth-child(n+5):nth-child(-n+8) { display: none; }
+}
+</style>
