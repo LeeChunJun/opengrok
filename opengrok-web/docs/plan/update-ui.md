@@ -55,66 +55,66 @@
 
 ### C. 辅助 / 配置 / 错误页
 
-| 文件 | 类型 | 行数 +/− | 作用 | 关键改动 |
-| --- | --- | --- | --- | --- |
-| `src/main/webapp/help.jsp` | 修改 | +461 | 帮助页 | UI 重构 |
-| `src/main/webapp/settings.jsp` | 修改 | +114 | 设置页 | UI 重构 |
-| `src/main/webapp/status.jsp` | 修改 | +102 | 状态页 | UI 重构 |
-| `src/main/webapp/error.jsp` | 修改 | +98 | 错误页 | UI 重构 |
-| `src/main/webapp/eforbidden.jsp` | 修改 | +60 | 403 页 | UI 重构 |
-| `src/main/webapp/enoent.jsp` | 修改 | +68 | 404 页 | UI 重构 |
-| `src/main/webapp/opensearch.jsp` | 修改 | +84 | 浏览器搜索插件 | UI 重构 |
-| `src/main/webapp/rss.jsp` | 修改 | +141 | RSS | UI 重构 |
-| `src/main/webapp/rss.xsl.xml` | 修改 | +55 | RSS XSL | UI 重构 |
-| `src/main/webapp/js/utils-0.0.48.js` | 修改 | +4 | 通用工具 | 新增 `domReady` 队列 / 增强的 IIFE |
-| `src/main/webapp/js/searchable-option-list-2.0.16.js` | 修改 | +94 | 项目下拉 | UI 调整 |
+| 文件                                                    | 类型 | 行数 +/− | 作用      | 关键改动                        |
+|-------------------------------------------------------|----|--------|---------|-----------------------------|
+| `src/main/webapp/help.jsp`                            | 修改 | +461   | 帮助页     | UI 重构                       |
+| `src/main/webapp/settings.jsp`                        | 修改 | +114   | 设置页     | UI 重构                       |
+| `src/main/webapp/status.jsp`                          | 修改 | +102   | 状态页     | UI 重构                       |
+| `src/main/webapp/error.jsp`                           | 修改 | +98    | 错误页     | UI 重构                       |
+| `src/main/webapp/eforbidden.jsp`                      | 修改 | +60    | 403 页   | UI 重构                       |
+| `src/main/webapp/enoent.jsp`                          | 修改 | +68    | 404 页   | UI 重构                       |
+| `src/main/webapp/opensearch.jsp`                      | 修改 | +84    | 浏览器搜索插件 | UI 重构                       |
+| `src/main/webapp/rss.jsp`                             | 修改 | +141   | RSS     | UI 重构                       |
+| `src/main/webapp/rss.xsl.xml`                         | 修改 | +55    | RSS XSL | UI 重构                       |
+| `src/main/webapp/js/utils-0.0.48.js`                  | 修改 | +4     | 通用工具    | 新增 `domReady` 队列 / 增强的 IIFE |
+| `src/main/webapp/js/searchable-option-list-2.0.16.js` | 修改 | +94    | 项目下拉    | UI 调整                       |
 
 ### D. Java 后端
 
-| 文件 | 类型 | 行数 +/− | 作用 | 关键改动 |
-| --- | --- | --- | --- | --- |
-| `src/main/java/org/opengrok/web/CharacterEncodingFilter.java` | **新增** | +78 | Servlet Filter | 强制请求 / 响应编码为 UTF-8；在 `web.xml` 挂到 `/*` |
-| `src/main/java/org/opengrok/web/GetFile.java` | 修改 | +24 | 文件下载 | 行为变更或 bug 修复 |
+| 文件                                                            | 类型     | 行数 +/− | 作用             | 关键改动                                   |
+|---------------------------------------------------------------|--------|--------|----------------|----------------------------------------|
+| `src/main/java/org/opengrok/web/CharacterEncodingFilter.java` | **新增** | +78    | Servlet Filter | 强制请求 / 响应编码为 UTF-8；在 `web.xml` 挂到 `/*` |
+| `src/main/java/org/opengrok/web/GetFile.java`                 | 修改     | +24    | 文件下载           | 行为变更或 bug 修复                           |
 
 ### E. 删除的 tag 文件
 
-| 文件 | 类型 | 备注 |
-| --- | --- | --- |
-| `src/main/webapp/WEB-INF/tags/project.tag` | 删除 | 已被 list.jsp 内联 |
-| `src/main/webapp/WEB-INF/tags/projects.tag` | 删除 | 已被 list.jsp 内联 |
+| 文件                                              | 类型 | 备注                         |
+|-------------------------------------------------|----|----------------------------|
+| `src/main/webapp/WEB-INF/tags/project.tag`      | 删除 | 已被 list.jsp 内联             |
+| `src/main/webapp/WEB-INF/tags/projects.tag`     | 删除 | 已被 list.jsp 内联             |
 | `src/main/webapp/WEB-INF/tags/repositories.tag` | 删除 | 已被 list.jsp / index.jsp 内联 |
-| `src/main/webapp/WEB-INF/tags/repository.tag` | 删除 | 已被 list.jsp / index.jsp 内联 |
+| `src/main/webapp/WEB-INF/tags/repository.tag`   | 删除 | 已被 list.jsp / index.jsp 内联 |
 
 > 这些 tag 在 master 上仍存在但**不再被任何页面引用**，删除不影响功能。master 更新后这两个 tag 仍会同步回来——无须迁移动作。
 
 ### F. 配置文件
 
-| 文件 | 类型 | 行数 +/− | 作用 | 关键改动 |
-| --- | --- | --- | --- | --- |
-| `src/main/webapp/WEB-INF/web.xml` | 修改 | +24 | Web 应用配置 | 注册 `CharacterEncodingFilter`（`/*`，`REQUEST`+`FORWARD` dispatcher）；`configuration.xml` 路径指向本地（`D:\Programs\opengrok\etc\configuration.xml`） |
-| `opengrok-web/pom.xml` | 修改 | +21 | Maven 构建 | Jetty 插件升级到 `org.eclipse.jetty.ee10:jetty-ee10-maven-plugin:12.0.10`；`httpConnector.port=8081`；jvmArgs 增加 `--add-opens` / `--add-exports` |
+| 文件                                | 类型 | 行数 +/− | 作用       | 关键改动                                                                                                                                       |
+|-----------------------------------|----|--------|----------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| `src/main/webapp/WEB-INF/web.xml` | 修改 | +24    | Web 应用配置 | 注册 `CharacterEncodingFilter`（`/*`，`REQUEST`+`FORWARD` dispatcher）；`configuration.xml` 路径指向本地（`D:\Programs\opengrok\etc\configuration.xml`） |
+| `opengrok-web/pom.xml`            | 修改 | +21    | Maven 构建 | Jetty 插件升级到 `org.eclipse.jetty.ee10:jetty-ee10-maven-plugin:12.0.10`；`httpConnector.port=8081`；jvmArgs 增加 `--add-opens` / `--add-exports`  |
 
 ### G. 文档
 
-| 文件 | 类型 | 作用 |
-| --- | --- | --- |
-| `docs/ui/index.html` | **新增** | 新版首页设计稿（对应 index.jsp） |
-| `docs/ui/code-view.html` | **新增** | 代码查看页设计稿（对应 list.jsp + xref.jspf） |
-| `docs/ui/directory-history.html` | **新增** | 目录历史页设计稿（对应 history.jsp） |
-| `docs/ui/directory-view.html` | **新增** | 目录列表设计稿（对应 list.jsp） |
-| `docs/ui/file-diff-detail.html` | **新增** | diff 详情设计稿（对应 diff.jsp） |
-| `docs/ui/file-history-diff.html` | **新增** | 历史 diff 设计稿（对应 diff.jsp 历史对比分支） |
-| `docs/intro/open-grok-web-guide.md` | **新增** | 新版 opengrok-web 模块全面解析（837 行） |
-| `docs/intro/overview.md` | 修改 | 模块概览 |
-| `docs/intro/run.md` | 修改 | 运行步骤（**包含完整的 Jetty 8081 部署脚本**，本指南末尾摘录） |
+| 文件                                  | 类型     | 作用                                      |
+|-------------------------------------|--------|-----------------------------------------|
+| `docs/ui/index.html`                | **新增** | 新版首页设计稿（对应 index.jsp）                   |
+| `docs/ui/code-view.html`            | **新增** | 代码查看页设计稿（对应 list.jsp + xref.jspf）       |
+| `docs/ui/directory-history.html`    | **新增** | 目录历史页设计稿（对应 history.jsp）                |
+| `docs/ui/directory-view.html`       | **新增** | 目录列表设计稿（对应 list.jsp）                    |
+| `docs/ui/file-diff-detail.html`     | **新增** | diff 详情设计稿（对应 diff.jsp）                 |
+| `docs/ui/file-history-diff.html`    | **新增** | 历史 diff 设计稿（对应 diff.jsp 历史对比分支）         |
+| `docs/intro/open-grok-web-guide.md` | **新增** | 新版 opengrok-web 模块全面解析（837 行）           |
+| `docs/intro/overview.md`            | 修改     | 模块概览                                    |
+| `docs/intro/run.md`                 | 修改     | 运行步骤（**包含完整的 Jetty 8081 部署脚本**，本指南末尾摘录） |
 
 ### H. 工具 / 内部文件（无需迁移）
 
-| 文件 | 类型 | 备注 |
-| --- | --- | --- |
+| 文件                            | 类型 | 备注                      |
+|-------------------------------|----|-------------------------|
 | `.claude/settings.local.json` | 新增 | Claude Code 本地配置，**忽略** |
-| `.codegraph/.gitignore` | 新增 | 内部工具，**忽略** |
-| `.codegraph/config.json` | 新增 | 内部工具，**忽略** |
+| `.codegraph/.gitignore`       | 新增 | 内部工具，**忽略**             |
+| `.codegraph/config.json`      | 新增 | 内部工具，**忽略**             |
 
 ---
 
@@ -159,23 +159,23 @@
 
 ### 3.5 关键 JS 函数（迁移时检查名字是否被 master 改过）
 
-| JS 函数 | 文件 | 作用 |
-| --- | --- | --- |
-| `renderPagination()` | `index.jsp` 内联 | 客户端分页渲染 |
-| `performInlineSearch()` | `index.jsp` 内联 | JS 驱动的搜索请求 |
-| `executeSearch()` | `index.jsp` 内联 | 搜索执行 |
-| `buildBreadcrumb()` | `index.jsp` 内联 | 面包屑构造 |
-| expand button click | `search.jsp` 内联 | 展开 / 收起 `.result-file-card` 的 overflow 行 |
+| JS 函数                   | 文件              | 作用                                       |
+|-------------------------|-----------------|------------------------------------------|
+| `renderPagination()`    | `index.jsp` 内联  | 客户端分页渲染                                  |
+| `performInlineSearch()` | `index.jsp` 内联  | JS 驱动的搜索请求                               |
+| `executeSearch()`       | `index.jsp` 内联  | 搜索执行                                     |
+| `buildBreadcrumb()`     | `index.jsp` 内联  | 面包屑构造                                    |
+| expand button click     | `search.jsp` 内联 | 展开 / 收起 `.result-file-card` 的 overflow 行 |
 
 ### 3.6 关键 Java / JSP 变量（迁移时检查名字是否被 master 改过）
 
-| 变量 | 文件 | 作用 |
-| --- | --- | --- |
-| `_searchCfg` | `search.jsp` / `more.jsp` | 局部 `PageConfig`，避免和 master 的 `cfg` 命名冲突 |
-| `_searchOrder` `_searchStart` `_searchMax` `_searchTotal` `_searchThisPage` `_searchErrorMsg` `_searchSliderHtml` | `search.jsp` | 搜索分页状态 |
-| `_moreCfg` | `more.jsp` | `more.jsp` 的局部 `PageConfig` |
-| `MAX_HITS_PER_CARD = 10` | `search.jsp` `<%! ... %>` | 单文件卡显示的默认命中行数 |
-| `request.setAttribute(SearchHelper.REQUEST_ATTR, ...)` | 多个 jsp | 沿用 master 的 `WebappListener.requestDestroyed()` 清理钩子 |
+| 变量                                                                                                                | 文件                        | 作用                                                   |
+|-------------------------------------------------------------------------------------------------------------------|---------------------------|------------------------------------------------------|
+| `_searchCfg`                                                                                                      | `search.jsp` / `more.jsp` | 局部 `PageConfig`，避免和 master 的 `cfg` 命名冲突              |
+| `_searchOrder` `_searchStart` `_searchMax` `_searchTotal` `_searchThisPage` `_searchErrorMsg` `_searchSliderHtml` | `search.jsp`              | 搜索分页状态                                               |
+| `_moreCfg`                                                                                                        | `more.jsp`                | `more.jsp` 的局部 `PageConfig`                          |
+| `MAX_HITS_PER_CARD = 10`                                                                                          | `search.jsp` `<%! ... %>` | 单文件卡显示的默认命中行数                                        |
+| `request.setAttribute(SearchHelper.REQUEST_ATTR, ...)`                                                            | 多个 jsp                    | 沿用 master 的 `WebappListener.requestDestroyed()` 清理钩子 |
 
 ---
 
@@ -236,15 +236,15 @@ grep -rn "<%@ include" opengrok-web/src/main/webapp/
 
 ### 4.3 验收脚本（迁移完成后跑一遍）
 
-| 路径 | 期望 |
-| --- | --- |
-| `http://localhost:8081/` | 新 UI 首页：搜索框 + 项目 chips + 仓库卡片网格 |
-| `http://localhost:8081/search?search=<keyword>` | 新 UI 搜索结果：`.result-file-card` 卡片化 + `.page-btn` 分页 |
-| `http://localhost:8081/help.jsp` | 新 UI 帮助页 |
-| `http://localhost:8081/source?path=<file>` | 新 UI 代码查看页面 |
-| `http://localhost:8081/history?path=<file>` | 新 UI 历史页（旧 `.more` `.sel` → 新 `.page-btn` 翻译正常） |
-| `http://localhost:8081/diff?path=<file1>&r2=<file2>` | 新 UI diff 页 |
-| 浏览器硬刷新 (Ctrl+Shift+R) | 加载最新 CSS / JS |
+| 路径                                                   | 期望                                                 |
+|------------------------------------------------------|----------------------------------------------------|
+| `http://localhost:8081/`                             | 新 UI 首页：搜索框 + 项目 chips + 仓库卡片网格                    |
+| `http://localhost:8081/search?search=<keyword>`      | 新 UI 搜索结果：`.result-file-card` 卡片化 + `.page-btn` 分页 |
+| `http://localhost:8081/help.jsp`                     | 新 UI 帮助页                                           |
+| `http://localhost:8081/source?path=<file>`           | 新 UI 代码查看页面                                        |
+| `http://localhost:8081/history?path=<file>`          | 新 UI 历史页（旧 `.more` `.sel` → 新 `.page-btn` 翻译正常）    |
+| `http://localhost:8081/diff?path=<file1>&r2=<file2>` | 新 UI diff 页                                        |
+| 浏览器硬刷新 (Ctrl+Shift+R)                                | 加载最新 CSS / JS                                      |
 
 ---
 
@@ -261,15 +261,15 @@ grep -rn "<%@ include" opengrok-web/src/main/webapp/
 
 ## 六、产物路径速查
 
-| 产物 | 路径 |
-| --- | --- |
+| 产物                     | 路径                                                                                                     |
+|------------------------|--------------------------------------------------------------------------------------------------------|
 | 旧 UI war (Tomcat 8080) | `D:\Programs\apache_tomcat\webapps\source.war` 与 `D:\Programs\apache_tomcat\webapps\source\` — **不要碰** |
-| 新 UI war 构建产物 | `D:\AppsData\deploy\opengrok\opengrok-web\target\source.war` |
-| 新 UI Jetty 启动端口 | 8081（由 `opengrok-web/pom.xml` 配置） |
-| 配置文件路径 | `D:\Programs\opengrok\etc\configuration.xml` |
-| 新版模块文档 | `opengrok-web/docs/intro/open-grok-web-guide.md`（837 行） |
-| 运行步骤 | `opengrok-web/docs/intro/run.md` |
-| 6 个设计稿 | `opengrok-web/docs/ui/*.html` |
+| 新 UI war 构建产物          | `D:\AppsData\deploy\opengrok\opengrok-web\target\source.war`                                           |
+| 新 UI Jetty 启动端口        | 8081（由 `opengrok-web/pom.xml` 配置）                                                                      |
+| 配置文件路径                 | `D:\Programs\opengrok\etc\configuration.xml`                                                           |
+| 新版模块文档                 | `opengrok-web/docs/intro/open-grok-web-guide.md`（837 行）                                                |
+| 运行步骤                   | `opengrok-web/docs/intro/run.md`                                                                       |
+| 6 个设计稿                 | `opengrok-web/docs/ui/*.html`                                                                          |
 
 ---
 
@@ -350,14 +350,14 @@ Start-Sleep -Seconds 8
 
 ### 7.4 不干扰 8080 的关键点
 
-| 关键点 | 说明 |
-| --- | --- |
-| 端口不冲突 | Jetty 8081 vs Tomcat 8080，端口天然分离 |
-| 进程独立 | Jetty 是 `mvn jetty:run` 的 JVM，Tomcat 是 `Tomcat9` 服务，互不影响 |
-| 部署目录不冲突 | Jetty 用 `opengrok-web/target/source.war`（临时）；Tomcat 用 `apache_tomcat/webapps/source.war`（固定） |
-| 数据共享 | 两个实例都指向同一个 `D:\Programs\opengrok\etc\configuration.xml`，索引数据一致 |
-| **不要**把 `target/source.war` 拷到 `apache_tomcat/webapps/` | 那会污染 8080 上的旧 UI |
-| **不要**改 `apache_tomcat\conf\server.xml` | 没必要，Jetty 已经有自己的端口配置 |
+| 关键点                                                     | 说明                                                                                           |
+|---------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| 端口不冲突                                                   | Jetty 8081 vs Tomcat 8080，端口天然分离                                                             |
+| 进程独立                                                    | Jetty 是 `mvn jetty:run` 的 JVM，Tomcat 是 `Tomcat9` 服务，互不影响                                     |
+| 部署目录不冲突                                                 | Jetty 用 `opengrok-web/target/source.war`（临时）；Tomcat 用 `apache_tomcat/webapps/source.war`（固定） |
+| 数据共享                                                    | 两个实例都指向同一个 `D:\Programs\opengrok\etc\configuration.xml`，索引数据一致                               |
+| **不要**把 `target/source.war` 拷到 `apache_tomcat/webapps/` | 那会污染 8080 上的旧 UI                                                                             |
+| **不要**改 `apache_tomcat\conf\server.xml`                 | 没必要，Jetty 已经有自己的端口配置                                                                         |
 
 ### 7.5 一键脚本（放进项目根目录的 `start-8081.ps1`）
 
@@ -406,14 +406,14 @@ try {
 
 ### 7.6 常见问题排查
 
-| 现象 | 处理 |
-| --- | --- |
-| 改了 `.jsp` 没生效 | 重启 Jetty（Ctrl+C → `mvnw jetty:run`） + 浏览器硬刷新 Ctrl+Shift+R |
-| Jetty 启动报 `port 8080 in use` | 检查 `pom.xml` 的 `<httpConnector><port>` 是否还是 8081；如果被 master 改回 8080 改回来 |
-| 8081 启动报 `port already in use` | `Get-NetTCPConnection -LocalPort 8081` 找占用进程，按需 kill |
-| 改了 `style-*.css` / `default/img/*` 没变化 | DevTools Network 勾"Disable cache"，或硬刷新 |
-| autocomplete 下拉无内容 / 项目名 baseline 不齐 | 看 `docs/plan/ui-refactor.md` 的对应修改条目排查 |
-| 中文搜索无结果 | 检查 `web.xml` 的 `CharacterEncodingFilter` 是否还在、`<dispatcher>REQUEST</dispatcher><dispatcher>FORWARD</dispatcher>` 是否齐 |
+| 现象                                     | 处理                                                                                                                   |
+|----------------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| 改了 `.jsp` 没生效                          | 重启 Jetty（Ctrl+C → `mvnw jetty:run`） + 浏览器硬刷新 Ctrl+Shift+R                                                            |
+| Jetty 启动报 `port 8080 in use`           | 检查 `pom.xml` 的 `<httpConnector><port>` 是否还是 8081；如果被 master 改回 8080 改回来                                              |
+| 8081 启动报 `port already in use`         | `Get-NetTCPConnection -LocalPort 8081` 找占用进程，按需 kill                                                                 |
+| 改了 `style-*.css` / `default/img/*` 没变化 | DevTools Network 勾"Disable cache"，或硬刷新                                                                               |
+| autocomplete 下拉无内容 / 项目名 baseline 不齐   | 看 `docs/plan/ui-refactor.md` 的对应修改条目排查                                                                               |
+| 中文搜索无结果                                | 检查 `web.xml` 的 `CharacterEncodingFilter` 是否还在、`<dispatcher>REQUEST</dispatcher><dispatcher>FORWARD</dispatcher>` 是否齐 |
 
 ---
 

@@ -6,9 +6,9 @@
 
 ## 两套环境约定
 
-| 端口 | 服务器 | 作用 | 当前在跑什么 |
-| --- | --- | --- | --- |
-| **8080** | **Tomcat** | **正式环境** | 旧 `menu.jspf`（`webapps/source/`），suggester 数据齐全，验证推荐输入 UI 的形态参照 |
+| 端口       | 服务器                         | 作用            | 当前在跑什么                                                                        |
+|----------|-----------------------------|---------------|-------------------------------------------------------------------------------|
+| **8080** | **Tomcat**                  | **正式环境**      | 旧 `menu.jspf`（`webapps/source/`），suggester 数据齐全，验证推荐输入 UI 的形态参照               |
 | **8081** | **Jetty** (`mvn jetty:run`) | **开发 / 测试环境** | 重构后的 `index.jsp`（挂在 `target/source.war`）；**所有本次重构 #1 / #1a–#1u 只在 8081 验收生效** |
 
 8080 不部署本次重构产物，不要在 8080 上做 UI 验收。
@@ -106,9 +106,9 @@ Start-Sleep -Seconds 8
 
 ## 通用排查
 
-| 现象 | 处理 |
-| --- | --- |
-| 改了 `.jsp` 没生效 | 重启 Jetty（步骤四） + 浏览器硬刷新 Ctrl+Shift+R |
-| Jetty 启动报 `port 8080 in use` | `Get-Process -Name java`，按 mtime 杀最旧的 PID |
-| 改了 `style-*.css` / `default/img/*` 没变化 | DevTools Network 勾"Disable cache"，或硬刷新 |
-| autocomplete 下拉无内容 / 项目名 baseline 不齐 | 直接看 `docs/plan/ui-refactor.md` 的对应修改条目（按修复时间倒序在 #1u → #1p → #1o → #1n 排查） |
+| 现象                                     | 处理                                                                        |
+|----------------------------------------|---------------------------------------------------------------------------|
+| 改了 `.jsp` 没生效                          | 重启 Jetty（步骤四） + 浏览器硬刷新 Ctrl+Shift+R                                       |
+| Jetty 启动报 `port 8080 in use`           | `Get-Process -Name java`，按 mtime 杀最旧的 PID                                 |
+| 改了 `style-*.css` / `default/img/*` 没变化 | DevTools Network 勾"Disable cache"，或硬刷新                                    |
+| autocomplete 下拉无内容 / 项目名 baseline 不齐   | 直接看 `docs/plan/ui-refactor.md` 的对应修改条目（按修复时间倒序在 #1u → #1p → #1o → #1n 排查） |
